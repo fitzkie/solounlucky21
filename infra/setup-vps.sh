@@ -3,6 +3,11 @@
 # Run as root on a fresh Vultr Ubuntu 24.04 LTS instance.
 set -euo pipefail
 
+if [ "$(id -u)" -ne 0 ]; then
+  echo "ERROR: This script must be run as root" >&2
+  exit 1
+fi
+
 echo "==> [1/6] Updating system packages..."
 apt-get update -y
 apt-get upgrade -y
@@ -36,24 +41,24 @@ else
 fi
 
 echo "==> [4/6] Creating application directories..."
+# /var/run/unlucky21 is created by systemd RuntimeDirectory at service start
 mkdir -p \
-    /var/run/unlucky21 \
     /etc/unlucky21 \
     /var/log/unlucky21 \
     /var/lib/unlucky21/bitcoin \
     /opt/unlucky21
 
+chown root:unlucky21 /etc/unlucky21
+chmod 750 /etc/unlucky21
+
 chown -R unlucky21:unlucky21 \
-    /var/run/unlucky21 \
-    /etc/unlucky21 \
     /var/log/unlucky21 \
     /var/lib/unlucky21 \
     /opt/unlucky21
 
-echo "    Directories created and ownership set to unlucky21:unlucky21."
+echo "    Directories created and ownership set."
 
 echo "==> [5/6] Configuring UFW firewall..."
-ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp   comment 'SSH'
@@ -64,6 +69,14 @@ ufw status verbose
 echo "==> [6/6] Enabling and starting fail2ban..."
 systemctl enable fail2ban
 systemctl start fail2ban
+
+cat > /etc/fail2ban/jail.local <<'EOF'
+[sshd]
+enabled = true
+maxretry = 5
+bantime = 3600
+EOF
+systemctl restart fail2ban
 
 echo ""
 echo "======================================================"
