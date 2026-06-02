@@ -106,6 +106,13 @@ const readDeadline = 500 * time.Millisecond
 func (s *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
 
+	// Set deadline before the first read so a client that connects but never
+	// sends anything cannot hold the goroutine open indefinitely.
+	if err := conn.SetDeadline(time.Now().Add(readDeadline)); err != nil {
+		slog.Error("socket: set initial deadline", "err", err)
+		return
+	}
+
 	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {
 		// Refresh deadline on each message read.
