@@ -1,0 +1,36 @@
+# systemd unit for Bitcoin Core — SoloUnlucky21 signet node
+# Install to: /etc/systemd/system/bitcoin.service
+
+[Unit]
+Description=Bitcoin Core (signet) — SoloUnlucky21
+After=network.target
+Documentation=https://bitcoin.org/en/bitcoin-core/
+
+[Service]
+User=unlucky21
+Group=unlucky21
+
+# bitcoind forks to the background via -daemon, so Type=forking is correct.
+Type=forking
+PIDFile=/var/lib/unlucky21/bitcoin/signet/bitcoind.pid
+
+ExecStart=/usr/local/bin/bitcoind \
+    -conf=/etc/unlucky21/bitcoin.conf \
+    -datadir=/var/lib/unlucky21/bitcoin
+
+ExecStop=/usr/local/bin/bitcoin-cli \
+    -conf=/etc/unlucky21/bitcoin.conf \
+    stop
+
+Restart=on-failure
+RestartSec=30
+
+# Bitcoin Core can take several minutes to start on the first run while it
+# initialises the block index and UTXO set.
+TimeoutStartSec=300
+
+# Graceful shutdown flushes the UTXO cache to disk; allow enough time.
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target
