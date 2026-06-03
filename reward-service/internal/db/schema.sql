@@ -51,17 +51,17 @@ CREATE TABLE IF NOT EXISTS workers (
 -- Foreign keys (added after all tables exist to avoid forward-reference issues)
 -- -------------------------------------------------------------------------
 
-ALTER TABLE blocks
-  ADD CONSTRAINT IF NOT EXISTS fk_blocks_round
-  FOREIGN KEY (round_id) REFERENCES rounds(id);
-
-ALTER TABLE rounds
-  ADD CONSTRAINT IF NOT EXISTS fk_rounds_block
-  FOREIGN KEY (block_id) REFERENCES blocks(id);
-
-ALTER TABLE shares
-  ADD CONSTRAINT IF NOT EXISTS fk_shares_round
-  FOREIGN KEY (round_id) REFERENCES rounds(id);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_blocks_round') THEN
+    ALTER TABLE blocks ADD CONSTRAINT fk_blocks_round FOREIGN KEY (round_id) REFERENCES rounds(id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_rounds_block') THEN
+    ALTER TABLE rounds ADD CONSTRAINT fk_rounds_block FOREIGN KEY (block_id) REFERENCES blocks(id);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_shares_round') THEN
+    ALTER TABLE shares ADD CONSTRAINT fk_shares_round FOREIGN KEY (round_id) REFERENCES rounds(id);
+  END IF;
+END $$;
 
 -- -------------------------------------------------------------------------
 -- Indexes
