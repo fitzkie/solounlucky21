@@ -1,2 +1,4 @@
 .worktrees/
 datum-gateway/src/datum_reward_socket.o
+.DS_Store
+docs/**/.DS_Store
