@@ -14,6 +14,12 @@ TEST_MINER_ADDR_A="${TEST_MINER_ADDR_A:-}"   # must be set by user
 TEST_MINER_ADDR_B="${TEST_MINER_ADDR_B:-}"   # must be set by user
 MINE_SECONDS="${MINE_SECONDS:-60}"           # how long to run cpuminer per phase
 
+MINER_PID=""
+cleanup() {
+    [ -n "$MINER_PID" ] && kill "$MINER_PID" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
 # ---------------------------------------------------------------------------
 # Prerequisites
 # ---------------------------------------------------------------------------
