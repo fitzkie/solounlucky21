@@ -1,0 +1,18 @@
+# Secrets and sensitive configuration — never commit these
+*.secret
+*.key
+*.pem
+*.p12
+*.pfx
+*.env
+.env
+.env.*
+secrets.json
+secrets.yaml
+secrets.yml
+secrets.toml
+*-secrets.*
+*_secrets.*
+unlucky21.conf
+rpcpassword
+*.rpcauth

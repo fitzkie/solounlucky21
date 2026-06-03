@@ -1,0 +1,27 @@
+[Unit]
+Description=SoloUnlucky21 datum_gateway Stratum Server
+Documentation=https://github.com/YOUR_GITHUB_USERNAME/solounlucky21
+After=network.target bitcoin-unlucky21.service reward-unlucky21.service
+Requires=bitcoin-unlucky21.service reward-unlucky21.service
+
+[Service]
+User=unlucky21
+Group=unlucky21
+Type=simple
+
+ExecStart=/usr/local/bin/datum_gateway --config /etc/unlucky21/datum-gateway.conf
+
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=datum-gateway-unlucky21
+
+[Install]
+WantedBy=multi-user.target
