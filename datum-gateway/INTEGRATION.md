@@ -1,4 +1,4 @@
-# SoloUnlucky21 — datum_gateway Integration Guide
+# Unlucky21 — datum_gateway Integration Guide
 
 This document tells you exactly how to wire `datum_reward_socket.c` into the
 `datum_gateway` source tree after you clone it on the VPS.  Follow every step
@@ -10,16 +10,16 @@ in order.  Steps 1–4 are one-time setup; Step 5 is an end-to-end smoke test.
 
 - You have cloned the OCEAN datum_gateway repository into `/opt/datum-gateway/`.
 - You have already built the reward-service binary (see `reward-service/README.md`).
-- The SoloUnlucky21 support files are in `/opt/datum-gateway/src/`:
+- The Unlucky21 support files are in `/opt/datum-gateway/src/`:
   - `src/datum_reward_socket.h`
   - `src/datum_reward_socket.c`
 
-If those files are not present, copy them from the solounlucky21 repo:
+If those files are not present, copy them from the unlucky21 repo:
 
 ```bash
-cp /opt/solounlucky21/datum-gateway/src/datum_reward_socket.h \
+cp /opt/unlucky21/datum-gateway/src/datum_reward_socket.h \
    /opt/datum-gateway/src/
-cp /opt/solounlucky21/datum-gateway/src/datum_reward_socket.c \
+cp /opt/unlucky21/datum-gateway/src/datum_reward_socket.c \
    /opt/datum-gateway/src/
 ```
 

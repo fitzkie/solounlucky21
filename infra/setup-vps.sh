@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup-vps.sh — one-time VPS provisioning for SoloUnlucky21
+# setup-vps.sh — one-time VPS provisioning for Unlucky21
 # Run as root on a fresh Vultr Ubuntu 24.04 LTS instance.
 set -euo pipefail
 
@@ -80,7 +80,7 @@ systemctl restart fail2ban
 
 echo ""
 echo "======================================================"
-echo "  SoloUnlucky21 VPS provisioning complete."
+echo "  Unlucky21 VPS provisioning complete."
 echo "  SSH (22/tcp) and Stratum (3333/tcp) are open."
 echo "  System user 'unlucky21' and all directories ready."
 echo "======================================================"

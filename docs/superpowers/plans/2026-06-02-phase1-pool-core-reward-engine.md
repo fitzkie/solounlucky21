@@ -1,4 +1,4 @@
-# SoloUnlucky21 Phase 1: Pool Core + Reward Engine Implementation Plan
+# Unlucky21 Phase 1: Pool Core + Reward Engine Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -13,7 +13,7 @@
 ## File Map
 
 ```
-solounlucky21/
+unlucky21/
 ├── infra/
 │   ├── bitcoin.conf               # Bitcoin Core signet config
 │   ├── bitcoin.service            # systemd unit — Bitcoin Core
@@ -56,13 +56,13 @@ solounlucky21/
 - [ ] **Step 1: Clone your GitHub repo locally**
 ```bash
 cd "/Users/brianfitzgerald/untitled folder"
-git clone git@github.com:<YOUR_GITHUB_USERNAME>/solounlucky21.git
-cd solounlucky21
+git clone git@github.com:<YOUR_GITHUB_USERNAME>/unlucky21.git
+cd unlucky21
 ```
 
 - [ ] **Step 2: Copy the existing docs into the repo**
 ```bash
-cp -r "/Users/brianfitzgerald/untitled folder/solounlucky21/docs" .
+cp -r "/Users/brianfitzgerald/untitled folder/unlucky21/docs" .
 git add docs/
 git commit -m "docs: add phase 1 design spec and implementation plan"
 ```
@@ -1494,7 +1494,7 @@ In your browser: go to `https://github.com/OCEAN-xyz/datum_gateway` → click Fo
 
 - [ ] **Step 2: Add as submodule**
 ```bash
-cd "/Users/brianfitzgerald/untitled folder/solounlucky21"
+cd "/Users/brianfitzgerald/untitled folder/unlucky21"
 git submodule add git@github.com:<YOUR_GITHUB_USERNAME>/datum-gateway.git datum-gateway
 git submodule update --init --recursive
 ```
@@ -2012,7 +2012,7 @@ WantedBy=multi-user.target
 Create `infra/reward-service.service`:
 ```ini
 [Unit]
-Description=SoloUnlucky21 Reward Service
+Description=Unlucky21 Reward Service
 After=network.target postgresql.service
 Requires=postgresql.service
 

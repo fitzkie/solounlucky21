@@ -1,6 +1,6 @@
 # datum-gateway
 
-Fork of OCEAN-xyz/datum_gateway modified for SoloUnlucky21's top-21 coinbase reward model.
+Fork of OCEAN-xyz/datum_gateway modified for Unlucky21's top-21 coinbase reward model.
 
 ## What's changed from upstream
 - Added `src/datum_reward_socket.h` and `src/datum_reward_socket.c` — Unix socket client that calls the Go reward service for per-miner coinbase outputs
@@ -14,7 +14,7 @@ Go to https://github.com/OCEAN-xyz/datum_gateway and fork to your GitHub account
 Name it `datum-gateway`.
 
 ### 2. Add as git submodule
-From the solounlucky21 repo root:
+From the unlucky21 repo root:
 ```
 git submodule add git@github.com:YOUR_GITHUB_USERNAME/datum-gateway.git datum-gateway
 git submodule update --init --recursive

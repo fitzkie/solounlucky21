@@ -1,7 +1,7 @@
 # infra — deployment guide
 
 This directory contains the Bitcoin Core configuration and systemd unit for the
-SoloUnlucky21 signet node.
+Unlucky21 signet node.
 
 > **Warning:** The `rpcpassword` placeholder in `bitcoin.conf` **MUST** be
 > replaced with a strong random password before deployment. Generate one with:

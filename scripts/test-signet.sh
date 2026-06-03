@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# SoloUnlucky21 — Signet end-to-end integration test harness
+# Unlucky21 — Signet end-to-end integration test harness
 # Covers phases 1a–1e from the design spec.
 # ---------------------------------------------------------------------------
 
@@ -165,7 +165,7 @@ phase_1e() {
 # ---------------------------------------------------------------------------
 
 main() {
-    echo "=== SoloUnlucky21 Signet Integration Test ==="
+    echo "=== Unlucky21 Signet Integration Test ==="
     echo "Stratum: ${STRATUM_HOST}:${STRATUM_PORT}"
     echo "DB: ${DB_URL//:*@/:**@}"   # redact password
     echo ""

@@ -1,7 +1,7 @@
 /*
  * datum_reward_socket.c
  *
- * Unix socket client for the SoloUnlucky21 Go reward service.
+ * Unix socket client for the Unlucky21 Go reward service.
  * Connects to REWARD_SOCKET_PATH, sends a JSON coinbase request, and parses
  * the JSON response into a reward_output_list_t for coinbase construction.
  *

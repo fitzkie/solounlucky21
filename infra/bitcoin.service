@@ -1,8 +1,8 @@
-# systemd unit for Bitcoin Core — SoloUnlucky21 signet node
+# systemd unit for Bitcoin Core — Unlucky21 signet node
 # Install to: /etc/systemd/system/bitcoin.service
 
 [Unit]
-Description=Bitcoin Core (signet) — SoloUnlucky21
+Description=Bitcoin Core (signet) — Unlucky21
 After=network.target
 Documentation=https://bitcoin.org/en/bitcoin-core/
 

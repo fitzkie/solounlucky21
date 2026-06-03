@@ -1,4 +1,4 @@
--- SoloUnlucky21 reward-service schema
+-- Unlucky21 reward-service schema
 -- Idempotent: safe to run multiple times (IF NOT EXISTS throughout).
 -- Run via: psql -d <db> -f schema.sql
 -- Also embedded in the Go binary via //go:embed.

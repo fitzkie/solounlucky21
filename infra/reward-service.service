@@ -1,6 +1,6 @@
 [Unit]
-Description=SoloUnlucky21 Reward Service
-Documentation=https://github.com/YOUR_GITHUB_USERNAME/solounlucky21
+Description=Unlucky21 Reward Service
+Documentation=https://github.com/YOUR_GITHUB_USERNAME/unlucky21
 After=network.target postgresql.service bitcoin-unlucky21.service
 Requires=postgresql.service
 

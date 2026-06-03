@@ -1,11 +1,11 @@
-# SoloUnlucky21 — Phase 1: Pool Core + Reward Engine
+# Unlucky21 — Phase 1: Pool Core + Reward Engine
 **Design Spec** · 2026-06-02
 
 ---
 
 ## 1. Project Context
 
-SoloUnlucky21 (`www.solounlucky21.com`) is a Bitcoin-only solo mining pool with a unique coinbase reward model. Every block found by the pool pays out to:
+Unlucky21 (`www.unlucky21.com`) is a Bitcoin-only solo mining pool with a unique coinbase reward model. Every block found by the pool pays out to:
 
 - The **block finder** (any connected miner whose share triggered the block): fixed 0.50 BTC
 - The **top 21 ranked miners** (by rolling 7-day best share): split of remaining reward minus pool fee
@@ -14,7 +14,7 @@ SoloUnlucky21 (`www.solounlucky21.com`) is a Bitcoin-only solo mining pool with 
 All rewards are paid directly in the coinbase transaction. The pool holds no custody of miner funds at any point.
 
 Tagline: *"Don't find the block. Make the list."*
-Stratum endpoint: `stratum+tcp://bitcoin.solounlucky21.com:3333`
+Stratum endpoint: `stratum+tcp://bitcoin.unlucky21.com:3333`
 
 ---
 
@@ -63,7 +63,7 @@ Phase 1 does **not** include:
 │                               │  blocks / workers    │  │
 │                               └─────────────────────┘  │
 │                                                         │
-│  Miners ──► stratum+tcp://signet.solounlucky21.com:3333 │
+│  Miners ──► stratum+tcp://signet.unlucky21.com:3333 │
 └─────────────────────────────────────────────────────────┘
 ```
 

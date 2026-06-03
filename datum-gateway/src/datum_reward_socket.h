@@ -1,7 +1,7 @@
 /*
  * datum_reward_socket.h
  *
- * Unix socket client for the SoloUnlucky21 Go reward service.
+ * Unix socket client for the Unlucky21 Go reward service.
  * datum_gateway calls datum_request_coinbase_outputs() before building
  * each miner's block template. Returns -1 if the Go service is unavailable —
  * the caller MUST fall back to single-output (solo) coinbase in that case.
