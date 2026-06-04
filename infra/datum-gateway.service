@@ -9,7 +9,7 @@ User=unlucky21
 Group=unlucky21
 Type=simple
 
-ExecStart=/usr/local/bin/datum_gateway --config /etc/unlucky21/datum-gateway.conf
+ExecStart=/usr/local/bin/datum_gateway --config /etc/unlucky21/datum-gateway.json
 
 Restart=on-failure
 RestartSec=10

@@ -152,24 +152,24 @@ patch_file(
 # to carry the correct length through the SHA256 and assembleBlockAndSubmit calls.
 
 ASSEMBLY_TARGET = (
-    "\t\tmemcpy(&full_cb_txn[0], cb->coinb1_bin, cb->coinb1_len);\n"
-    "\t\tmemcpy(&full_cb_txn[cb->coinb1_len], extranonce_bin, 12);\n"
-    "\t\tmemcpy(&full_cb_txn[cb->coinb1_len+12], cb->coinb2_bin, cb->coinb2_len);"
+    "\tmemcpy(&full_cb_txn[0], cb->coinb1_bin, cb->coinb1_len);\n"
+    "\tmemcpy(&full_cb_txn[cb->coinb1_len], extranonce_bin, 12);\n"
+    "\tmemcpy(&full_cb_txn[cb->coinb1_len+12], cb->coinb2_bin, cb->coinb2_len);"
 )
 
 ASSEMBLY_REPLACEMENT = (
-    "\t\tmemcpy(&full_cb_txn[0], cb->coinb1_bin, cb->coinb1_len);\n"
-    "\t\tmemcpy(&full_cb_txn[cb->coinb1_len], extranonce_bin, 12);\n"
-    "\t\t/* Unlucky21: use personal coinb2 so the finder slot matches what was sent to the miner */\n"
-    "\t\tint coinb2_len_use = cb->coinb2_len;\n"
-    "\t\tif (!empty_work && m->personal_coinb2_valid &&\n"
-    "\t\t\t\tm->personal_coinb2_job_index == job->global_index) {\n"
-    "\t\t\tmemcpy(&full_cb_txn[cb->coinb1_len+12],\n"
-    "\t\t\t\tm->personal_coinb2_bin, m->personal_coinb2_len);\n"
-    "\t\t\tcoinb2_len_use = m->personal_coinb2_len;\n"
-    "\t\t} else {\n"
-    "\t\t\tmemcpy(&full_cb_txn[cb->coinb1_len+12], cb->coinb2_bin, cb->coinb2_len);\n"
-    "\t\t}"
+    "\tmemcpy(&full_cb_txn[0], cb->coinb1_bin, cb->coinb1_len);\n"
+    "\tmemcpy(&full_cb_txn[cb->coinb1_len], extranonce_bin, 12);\n"
+    "\t/* Unlucky21: use personal coinb2 so the finder slot matches what was sent to the miner */\n"
+    "\tint coinb2_len_use = cb->coinb2_len;\n"
+    "\tif (!empty_work && m->personal_coinb2_valid &&\n"
+    "\t\t\tm->personal_coinb2_job_index == job->global_index) {\n"
+    "\t\tmemcpy(&full_cb_txn[cb->coinb1_len+12],\n"
+    "\t\t\tm->personal_coinb2_bin, m->personal_coinb2_len);\n"
+    "\t\tcoinb2_len_use = m->personal_coinb2_len;\n"
+    "\t} else {\n"
+    "\t\tmemcpy(&full_cb_txn[cb->coinb1_len+12], cb->coinb2_bin, cb->coinb2_len);\n"
+    "\t}"
 )
 
 patch_file(
