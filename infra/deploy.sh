@@ -58,6 +58,11 @@ for f in datum_coinbaser.c datum_reward_socket.c datum_reward_socket.h datum_blo
   fi
 done
 
+# Apply per-miner coinb2 personalization patches to datum_stratum.h/.c
+# (idempotent — skips each patch if already applied)
+echo "=== [2b] Patching datum_stratum for finder-address personalization ==="
+python3 "$REPO_DIR/infra/patch-stratum.py"
+
 # ─── 3. Rebuild datum_gateway ─────────────────────────────────────────────────
 echo "=== [3] Building datum_gateway ==="
 systemctl stop datum-gateway-unlucky21 datum-gateway-rental 2>/dev/null || true

@@ -936,3 +936,120 @@ int datum_coinbaser_init(void) {
 
 	return 0;
 }
+
+/* ── UNLUCKY21: per-miner personalized coinb2 ────────────────────────────────
+ *
+ * Build a coinb2 hex string and binary for a specific miner address.  The
+ * finder slot (output[0]) will contain btc_addr instead of the shared pool
+ * placeholder, so every miner's coinbase template is personalized.
+ *
+ * The coinb2 layout is inferred from the already-built shared coinb2[0]: if
+ * it starts with "ffffffff" the extranonce lives in the coinbase scriptSig
+ * (space_for_en_in_coinbase=true) and the sequence+varint belong in coinb2;
+ * otherwise the output count is already in coinb1 and coinb2 starts directly
+ * with the outputs.
+ *
+ * Returns the number of service outputs on success, 0 on failure.
+ * On failure the caller MUST fall back to the shared coinb2.
+ */
+int datum_generate_personal_coinb2(
+    T_DATUM_STRATUM_JOB *s,
+    const char          *btc_addr,
+    char                *coinb2_out,
+    unsigned char       *coinb2_bin_out,
+    int                 *len_out
+) {
+    reward_output_list_t personal;
+    int rc, k, i, idx, binlen;
+    int64_t fees_sats;
+    bool en_in_cb;
+    int output_count = 0;
+
+    *len_out = 0;
+
+    if (!s || !s->block_template || !btc_addr || btc_addr[0] == '\0') return 0;
+
+    fees_sats = ((int64_t)s->coinbase_value > 312500000LL) ?
+                (int64_t)s->coinbase_value - 312500000LL : 0LL;
+
+    rc = datum_request_coinbase_outputs(btc_addr, fees_sats, &personal);
+    if (rc <= 0) return 0;
+
+    /* Convert service outputs to Bitcoin scripts */
+    unsigned char scripts[REWARD_MAX_OUTPUTS][64];
+    int           script_lens[REWARD_MAX_OUTPUTS];
+    uint64_t      values[REWARD_MAX_OUTPUTS];
+    uint64_t      total = 0;
+
+    for (k = 0; k < personal.count && k < REWARD_MAX_OUTPUTS; k++) {
+        if (personal.outputs[k].amount_sats <= 0) continue;
+        int slen = addr_2_output_script(
+            personal.outputs[k].address, scripts[output_count], 64);
+        if (slen <= 0) continue;
+        script_lens[output_count] = slen;
+        values[output_count]      = (uint64_t)personal.outputs[k].amount_sats;
+        total                    += values[output_count];
+        output_count++;
+    }
+
+    if (output_count == 0) return 0;
+    if (total > s->coinbase_value) return 0; /* sanity: never pay more than we have */
+
+    /* Detect coinb2 layout from the shared coinbase */
+    en_in_cb = (strncmp(s->coinbase[0].coinb2, "ffffffff", 8) == 0);
+
+    idx = 0;
+
+    if (en_in_cb) {
+        /* Sequence + output count varint: N service outputs + 1 (dummy/leftover) + witness + signet = N+3 */
+        memcpy(&coinb2_out[idx], "ffffffff", 8);
+        idx = 8;
+        idx += append_bitcoin_varint_hex(output_count + 3, &coinb2_out[idx]);
+    }
+
+    /* Serialise each service output: value_le(8 bytes) + script_varint + script */
+    for (k = 0; k < output_count; k++) {
+        idx += sprintf(&coinb2_out[idx], "%016llx",
+            (unsigned long long)__builtin_bswap64(values[k]));
+        idx += append_bitcoin_varint_hex(script_lens[k], &coinb2_out[idx]);
+        for (i = 0; i < script_lens[k]; i++) {
+            uchar_to_hex(&coinb2_out[idx], scripts[k][i]);
+            idx += 2;
+        }
+    }
+
+    /* Slot after service outputs: pool-fee leftover OR dummy OP_RETURN */
+    if (total < s->coinbase_value) {
+        uint64_t leftover = s->coinbase_value - total;
+        idx += sprintf(&coinb2_out[idx], "%016llx",
+            (unsigned long long)__builtin_bswap64(leftover));
+        idx += append_bitcoin_varint_hex(s->pool_addr_script_len, &coinb2_out[idx]);
+        for (i = 0; i < s->pool_addr_script_len; i++) {
+            uchar_to_hex(&coinb2_out[idx], s->pool_addr_script[i]);
+            idx += 2;
+        }
+    } else {
+        /* Paid every sat to service outputs — add a prunable dummy OP_RETURN */
+        idx += sprintf(&coinb2_out[idx], "0000000000000000036a0100");
+    }
+
+    /* Witness commitment (varies per block template) */
+    idx += sprintf(&coinb2_out[idx], "0000000000000000%2.2x%s",
+        (unsigned int)(strlen(s->block_template->default_witness_commitment) >> 1),
+        s->block_template->default_witness_commitment);
+
+    /* Signet commitment: OP_RETURN PUSH4 0xecc7daa2 (OP_TRUE challenge, no signature) */
+    idx += sprintf(&coinb2_out[idx], "0000000000000000066a04ecc7daa2");
+
+    /* Lock time */
+    idx += sprintf(&coinb2_out[idx], "00000000");
+    coinb2_out[idx] = '\0';
+
+    /* Build binary version */
+    binlen = 0;
+    for (i = 0; i < idx; i += 2)
+        coinb2_bin_out[binlen++] = hex2bin_uchar(&coinb2_out[i]);
+    *len_out = binlen;
+
+    return output_count;
+}
