@@ -88,6 +88,13 @@ for unit in bitcoin reward-service datum-gateway signet-signer; do
   src=$(ls "$REPO_DIR/infra/${unit}".service 2>/dev/null || true)
   [ -z "$src" ] && continue
   dst_name=$(basename "$src" | sed 's/bitcoin/bitcoin-unlucky21/;s/reward-service/reward-unlucky21/;s/datum-gateway/datum-gateway-unlucky21/;s/signet-signer/signet-signer/')
+  # Never overwrite a service unit that references a secrets env file —
+  # those files are created during initial setup and must not be clobbered.
+  if grep -q 'EnvironmentFile=' "/etc/systemd/system/$dst_name" 2>/dev/null && \
+     ! grep -q 'EnvironmentFile=' "$src" 2>/dev/null; then
+    echo "  Skipped (has EnvironmentFile): $dst_name"
+    continue
+  fi
   cp "$src" "/etc/systemd/system/$dst_name"
   echo "  Updated: $dst_name"
 done

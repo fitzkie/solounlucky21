@@ -9,8 +9,11 @@ User=unlucky21
 Group=unlucky21
 Type=simple
 
-# DATABASE_URL must be set — reward service exits if missing
-Environment=DATABASE_URL=postgres://unlucky21:REPLACE_WITH_DB_PASSWORD@localhost/unlucky21?sslmode=disable
+# DB credentials are NOT stored in this file — loaded from an env file created
+# during setup (deploy.sh never overwrites it once it exists):
+#   echo DATABASE_URL=postgres://unlucky21:PASS@localhost/unlucky21?sslmode=disable \
+#        > /etc/unlucky21/reward-service.env
+EnvironmentFile=/etc/unlucky21/reward-service.env
 
 ExecStart=/opt/unlucky21/reward-service
 
