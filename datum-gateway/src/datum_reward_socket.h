@@ -42,4 +42,8 @@ int datum_request_coinbase_outputs(
     reward_output_list_t *result
 );
 
+
+void datum_reward_share_submit(const char *username, uint64_t difficulty, int is_stale);
+void datum_reward_block_found(int32_t height, const char *hash_hex, const char *finder_addr);
+
 #endif /* DATUM_REWARD_SOCKET_H */

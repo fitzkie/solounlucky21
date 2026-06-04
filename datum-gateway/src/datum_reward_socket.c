@@ -306,3 +306,89 @@ int datum_request_coinbase_outputs(
 
     return ret;
 }
+
+
+/* ── UNLUCKY21: fire-and-forget share submit ─────────────────────────────── */
+void datum_reward_share_submit(const char *username, uint64_t difficulty, int is_stale) {
+    int fd;
+    struct sockaddr_un addr;
+    char req[384];
+    char btc_addr[REWARD_ADDR_LEN] = {0};
+    char worker[64]                = {0};
+
+    if (!username || difficulty == 0) return;
+
+    const char *dot = strchr(username, '.');
+    if (dot) {
+        size_t n = (size_t)(dot - username);
+        if (n >= REWARD_ADDR_LEN) n = REWARD_ADDR_LEN - 1;
+        strncpy(btc_addr, username, n);
+        strncpy(worker, dot + 1, 63);
+    } else {
+        strncpy(btc_addr, username, REWARD_ADDR_LEN - 1);
+    }
+
+    fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (fd < 0) return;
+
+    struct timeval tv = {0, 20000}; /* 20ms max */
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, REWARD_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(fd); return; }
+
+    snprintf(req, sizeof(req),
+        "{\"type\":\"share\",\"btc_address\":\"%s\",\"worker_name\":\"%s\","
+        "\"difficulty\":\"%llu\",\"is_stale\":%s}\n",
+        btc_addr, worker, (unsigned long long)difficulty,
+        is_stale ? "true" : "false");
+
+    (void)write(fd, req, strlen(req));
+    close(fd);
+}
+
+/* ── UNLUCKY21: notify Go service that a block was found ─────────────────── */
+void datum_reward_block_found(int32_t height, const char *hash_hex, const char *finder_addr) {
+    int fd;
+    struct sockaddr_un addr;
+    char req[512];
+    char resp[64];
+
+    if (!hash_hex || !finder_addr) return;
+
+    fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return;
+
+    struct timeval tv = {2, 0}; /* 2s — wait for ack */
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, REWARD_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(fd); return; }
+
+    /* Parse finder address (strip worker suffix if present) */
+    char btc_addr[REWARD_ADDR_LEN] = {0};
+    const char *dot = strchr(finder_addr, '.');
+    if (dot) {
+        size_t n = (size_t)(dot - finder_addr);
+        if (n >= REWARD_ADDR_LEN) n = REWARD_ADDR_LEN - 1;
+        strncpy(btc_addr, finder_addr, n);
+    } else {
+        strncpy(btc_addr, finder_addr, REWARD_ADDR_LEN - 1);
+    }
+
+    snprintf(req, sizeof(req),
+        "{\"type\":\"block_found\",\"height\":%d,\"hash\":\"%s\","
+        "\"finder_address\":\"%s\",\"coinbase_txid\":\"\",\"fees_sats\":0}\n",
+        height, hash_hex, btc_addr);
+
+    (void)write(fd, req, strlen(req));
+    (void)read(fd, resp, sizeof(resp) - 1); /* wait for {"status":"ok"} */
+    close(fd);
+}
