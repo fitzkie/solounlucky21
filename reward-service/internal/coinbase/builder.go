@@ -6,8 +6,8 @@ const (
 	FinderAmountSats int64   = 50_000_000
 	PoolFeePercent   float64 = 0.02
 	MaxRankedSlots   int     = 21
-	// Replace with real pool fee address before mainnet launch
-	PoolFeeAddress = "bc1qPOOL_FEE_ADDRESS_PLACEHOLDER"
+	// Pool fee address — tb1q signet, update to mainnet bc1q before launch
+	PoolFeeAddress = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"
 )
 
 // RankedAddress holds the Bitcoin address of a ranked miner.

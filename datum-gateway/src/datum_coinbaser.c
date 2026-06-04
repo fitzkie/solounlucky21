@@ -541,10 +541,16 @@ void generate_coinbase_txns_for_stratum_job(T_DATUM_STRATUM_JOB *s, bool empty_o
 			empty_only = true;
 		}
 	} else {
-		// No pool
+		// No external DATUM pool — use local pool address for pool fee output
 		s->pool_addr_script_len = addr_2_output_script(datum_config.mining_pool_address, &s->pool_addr_script[0], 64);
-		s->is_datum_job = false;
-		empty_only = true;
+		// If the Unlucky21 coinbaser already fetched reward outputs, honour them.
+		// Otherwise fall back to the single-address (empty) coinbase.
+		if (s->available_coinbase_outputs_count > 0) {
+			s->is_datum_job = true;
+		} else {
+			s->is_datum_job = false;
+			empty_only = true;
+		}
 	}
 	if (!s->pool_addr_script_len) {
 		DLOG_FATAL("Could not generate output script for pool addr! Perhaps invalid? This is bad.");
@@ -713,12 +719,16 @@ void generate_coinbase_txns_for_stratum_job(T_DATUM_STRATUM_JOB *s, bool empty_o
 		//     --- it costs 10 extra bytes to do the OP_RETURN based extranonce
 		
 		if (!space_for_en_in_coinbase) {
-			cb_req_sz[1] = cb_req_sz[2] = cb_req_sz[3] = cb_req_sz[4] = cb_req_sz[5] = 119 + s->pool_addr_script_len + cb_input_sz + 10;
+			cb_req_sz[0] = cb_req_sz[1] = cb_req_sz[2] = cb_req_sz[3] = cb_req_sz[4] = cb_req_sz[5] = 119 + s->pool_addr_script_len + cb_input_sz + 10;
 		} else {
-			cb_req_sz[1] = cb_req_sz[2] = cb_req_sz[3] = cb_req_sz[4] = cb_req_sz[5] = 119 + s->pool_addr_script_len + cb_input_sz;
+			cb_req_sz[0] = cb_req_sz[1] = cb_req_sz[2] = cb_req_sz[3] = cb_req_sz[4] = cb_req_sz[5] = 119 + s->pool_addr_script_len + cb_input_sz;
 			cb_req_sz[2] += 10; // always OP_RETURN extranonce for type 2
 		}
-		
+
+		// TYPE 0 - Generic/default (multi-output, treated same as Nicehash)
+		i = datum_stratum_coinbase_fit_to_template(500, cb_req_sz[0], s);
+		generate_coinbase_txns_for_stratum_job_subtypebysize(s, 0, i, space_for_en_in_coinbase, cb1idx, cb2idx, false);
+
 		// TYPE 1 - "Nicehash" friendly, max 500 bytes
 		i = datum_stratum_coinbase_fit_to_template(500, cb_req_sz[1], s);
 		generate_coinbase_txns_for_stratum_job_subtypebysize(s, 1, i, space_for_en_in_coinbase, cb1idx, cb2idx, false);
