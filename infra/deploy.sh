@@ -63,6 +63,25 @@ done
 echo "=== [2b] Patching datum_stratum for finder-address personalization ==="
 python3 "$REPO_DIR/infra/patch-stratum.py"
 
+# Ensure datum_gateway routes submitblock through the signet-signer proxy (port 38335)
+# so blocks are signed before submission.  Direct connection to 38332 produces
+# bad-signet-blksig rejections.
+echo "=== [2c] Ensuring datum_gateway uses signet-signer proxy ==="
+python3 -c "
+import json
+cfg = '/etc/unlucky21/datum-gateway.json'
+with open(cfg) as f:
+    d = json.load(f)
+current = d.get('bitcoind', {}).get('rpcurl', '')
+if '38335' not in current:
+    d['bitcoind']['rpcurl'] = 'http://127.0.0.1:38335'
+    with open(cfg, 'w') as f:
+        json.dump(d, f, indent=2)
+    print('  Updated rpcurl to signet-signer proxy (38335)')
+else:
+    print('  rpcurl already points to signet-signer proxy — skipping')
+"
+
 # ─── 3. Rebuild datum_gateway ─────────────────────────────────────────────────
 echo "=== [3] Building datum_gateway ==="
 systemctl stop datum-gateway-unlucky21 datum-gateway-rental 2>/dev/null || true
