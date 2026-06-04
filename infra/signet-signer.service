@@ -1,0 +1,24 @@
+[Unit]
+Description=Unlucky21 Signet Signing Proxy
+After=network.target bitcoin-unlucky21.service
+Requires=bitcoin-unlucky21.service
+
+[Service]
+User=unlucky21
+Group=unlucky21
+Type=simple
+
+ExecStart=/usr/bin/python3 /opt/unlucky21/signet-signer.py
+
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=signet-signer
+
+[Install]
+WantedBy=multi-user.target

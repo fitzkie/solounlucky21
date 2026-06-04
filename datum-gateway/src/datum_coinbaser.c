@@ -66,10 +66,17 @@ int generate_coinbase_input(int height, char *cb, int *target_pot_index) {
 	int k, m, i;
 	int excess;
 	bool datum_active = false;
-	
-	// let's figure out our coinbase tags w/BIP34 height
-	i = append_UNum_hex(height, &cb[0]);
-	cb_input_sz += i>>1;
+
+	// BIP34 height encoding — must match Bitcoin Core's CScript() << height minimal encoding.
+	// Heights 1-16 use OP_1 through OP_16 (single opcode, not a full data push).
+	if (height >= 1 && height <= 16) {
+		uchar_to_hex(&cb[0], (unsigned char)(0x50 + height));
+		i = 2;
+		cb_input_sz = 1;
+	} else {
+		i = append_UNum_hex(height, &cb[0]);
+		cb_input_sz += i>>1;
+	}
 	
 	datum_active = datum_protocol_is_active();
 	
@@ -224,13 +231,13 @@ void generate_coinbase_txns_for_stratum_job_subtypebysize(T_DATUM_STRATUM_JOB *s
 	// "m" outputs fit
 	if (space_for_en_in_coinbase) {
 		// we'll start the empty coinb2 with the "sequence"
-		m+=2; // pool addr + witness
+		m+=3; // pool addr + signet commit + witness
 		pk_u64le(s->coinbase[coinbase_index].coinb2, cb2idx[coinbase_index], 0x6666666666666666ULL);  // "ffffffff"
 		cb2idx[coinbase_index] = 8;
 		cb2idx[coinbase_index] += append_bitcoin_varint_hex(m, &s->coinbase[coinbase_index].coinb2[cb2idx[coinbase_index]]); // us, witness, and "m" outputs
 	} else {
-		m+=3;
-		cb1idx[coinbase_index] += append_bitcoin_varint_hex(m, &s->coinbase[coinbase_index].coinb1[cb1idx[coinbase_index]]); // extranonce, us, witness commit, and "m" outputs
+		m+=4;
+		cb1idx[coinbase_index] += append_bitcoin_varint_hex(m, &s->coinbase[coinbase_index].coinb1[cb1idx[coinbase_index]]); // extranonce, us, signet commit, witness commit, and "m" outputs
 		
 		if (!special_coinb1) {
 			// append extranonce op_return
@@ -307,6 +314,8 @@ void generate_coinbase_txns_for_stratum_job_subtypebysize(T_DATUM_STRATUM_JOB *s
 	// witness commit output costs 46 bytes
 	// append the default_witness_commitment
 	cb2idx[coinbase_index] += sprintf(&s->coinbase[coinbase_index].coinb2[cb2idx[coinbase_index]], "0000000000000000%2.2x%s", (unsigned int)strlen(s->block_template->default_witness_commitment)>>1, s->block_template->default_witness_commitment);
+	// signet commitment: OP_RETURN + PUSH4 + SIGNET_HEADER (OP_TRUE challenge, no signature needed)
+	cb2idx[coinbase_index] += sprintf(&s->coinbase[coinbase_index].coinb2[cb2idx[coinbase_index]], "0000000000000000066a04ecc7daa2");
 	// lock time
 	cb2idx[coinbase_index] += sprintf(&s->coinbase[coinbase_index].coinb2[cb2idx[coinbase_index]], "00000000");
 }
@@ -409,8 +418,8 @@ void generate_base_coinbase_txns_for_stratum_job(T_DATUM_STRATUM_JOB *s, bool ne
 		// we'll start the empty coinb2 with the "sequence"
 		pk_u64le(s->coinbase[0].coinb2, 0, 0x6666666666666666ULL);  // "ffffffff"
 		cb2idx[0] = 8;
-		cb2idx[0] += append_bitcoin_varint_hex(2, &s->coinbase[0].coinb2[cb2idx[0]]); // us and witness commit
-		
+		cb2idx[0] += append_bitcoin_varint_hex(3, &s->coinbase[0].coinb2[cb2idx[0]]); // us, signet commit, and witness commit
+
 		if (new_block) {
 			// copy the beginning to the subsidy-only
 			memcpy(&s->subsidy_only_coinbase.coinb1[0], &s->coinbase[0].coinb1[0], cb1idx[0]);
@@ -418,11 +427,11 @@ void generate_base_coinbase_txns_for_stratum_job(T_DATUM_STRATUM_JOB *s, bool ne
 			append_bitcoin_varint_hex(1, &s->subsidy_only_coinbase.coinb2[8]); // just us!
 		}
 	} else {
-		// we're already at the point in coinb1 where we need an output count, which will be 3
+		// we're already at the point in coinb1 where we need an output count, which will be 4
 		if (new_block) {
 			j = cb1idx[0];
 		}
-		cb1idx[0] += append_bitcoin_varint_hex(3, &s->coinbase[0].coinb1[cb1idx[0]]); // extranonce, us, and witness commit
+		cb1idx[0] += append_bitcoin_varint_hex(4, &s->coinbase[0].coinb1[cb1idx[0]]); // extranonce, us, signet commit, and witness commit
 		
 		// append extranonce op_return
 		cb1idx[0] += sprintf(&s->coinbase[0].coinb1[cb1idx[0]], "0000000000000000106a0e%04" PRIx16, s->enprefix);
@@ -455,9 +464,11 @@ void generate_base_coinbase_txns_for_stratum_job(T_DATUM_STRATUM_JOB *s, bool ne
 	// witness commit output costs 46 bytes
 	// append the default_witness_commitment
 	cb2idx[0] += sprintf(&s->coinbase[0].coinb2[cb2idx[0]], "0000000000000000%2.2x%s", (unsigned int)strlen(s->block_template->default_witness_commitment)>>1, s->block_template->default_witness_commitment);
+	// signet commitment: OP_RETURN + PUSH4 + SIGNET_HEADER (OP_TRUE challenge, no signature needed)
+	cb2idx[0] += sprintf(&s->coinbase[0].coinb2[cb2idx[0]], "0000000000000000066a04ecc7daa2");
 	// lock time
 	cb2idx[0] += sprintf(&s->coinbase[0].coinb2[cb2idx[0]], "00000000");
-	
+
 	if (new_block) {
 		// Append the subsidy-only payout to the subsidy_only_coinbase
 		sprintf(&s->subsidy_only_coinbase.coinb2[j], "%016llx", (unsigned long long)__builtin_bswap64(block_reward(s->height))); // subsidy calc for height
@@ -615,8 +626,8 @@ void generate_coinbase_txns_for_stratum_job(T_DATUM_STRATUM_JOB *s, bool empty_o
 		// we'll start the empty coinb2 with the "sequence"
 		pk_u64le(s->coinbase[0].coinb2, 0, 0x6666666666666666ULL);  // "ffffffff"
 		cb2idx[0] = 8;
-		cb2idx[0] += append_bitcoin_varint_hex(2, &s->coinbase[0].coinb2[cb2idx[0]]); // us and witness commit
-		
+		cb2idx[0] += append_bitcoin_varint_hex(3, &s->coinbase[0].coinb2[cb2idx[0]]); // us, signet commit, and witness commit
+
 		if (empty_only) {
 			// copy the beginning to the subsidy-only
 			memcpy(&s->subsidy_only_coinbase.coinb1[0], &s->coinbase[0].coinb1[0], cb1idx[0]);
@@ -624,11 +635,11 @@ void generate_coinbase_txns_for_stratum_job(T_DATUM_STRATUM_JOB *s, bool empty_o
 			append_bitcoin_varint_hex(1, &s->subsidy_only_coinbase.coinb2[8]); // just us!
 		}
 	} else {
-		// we're already at the point in coinb1 where we need an output count, which will be 3
+		// we're already at the point in coinb1 where we need an output count, which will be 4
 		if (empty_only) {
 			j = cb1idx[0];
 		}
-		cb1idx[0] += append_bitcoin_varint_hex(3, &s->coinbase[0].coinb1[cb1idx[0]]); // extranonce, us, and witness commit
+		cb1idx[0] += append_bitcoin_varint_hex(4, &s->coinbase[0].coinb1[cb1idx[0]]); // extranonce, us, signet commit, and witness commit
 		
 		// append extranonce op_return
 		cb1idx[0] += sprintf(&s->coinbase[0].coinb1[cb1idx[0]], "0000000000000000106a0e%04" PRIx16, s->enprefix);
@@ -661,9 +672,11 @@ void generate_coinbase_txns_for_stratum_job(T_DATUM_STRATUM_JOB *s, bool empty_o
 	// witness commit output costs 46 bytes
 	// append the default_witness_commitment
 	cb2idx[0] += sprintf(&s->coinbase[0].coinb2[cb2idx[0]], "0000000000000000%2.2x%s", (unsigned int)strlen(s->block_template->default_witness_commitment)>>1, s->block_template->default_witness_commitment);
+	// signet commitment: OP_RETURN + PUSH4 + SIGNET_HEADER (OP_TRUE challenge, no signature needed)
+	cb2idx[0] += sprintf(&s->coinbase[0].coinb2[cb2idx[0]], "0000000000000000066a04ecc7daa2");
 	// lock time
 	cb2idx[0] += sprintf(&s->coinbase[0].coinb2[cb2idx[0]], "00000000");
-	
+
 	if (empty_only) {
 		// Append the subsidy-only payout to the subsidy_only_coinbase
 		sprintf(&s->subsidy_only_coinbase.coinb2[j], "%016llx", (unsigned long long)__builtin_bswap64(block_reward(s->height))); // subsidy calc for height
