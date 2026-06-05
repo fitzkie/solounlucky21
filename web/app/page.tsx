@@ -1,7 +1,6 @@
 import { getLeaderboard, getPoolStats } from '@/lib/db'
 
-// Revalidate every 30 seconds
-export const revalidate = 30
+export const dynamic = 'force-dynamic'
 
 function formatBTC(sats: number): string {
   return (sats / 100_000_000).toFixed(4) + ' BTC'

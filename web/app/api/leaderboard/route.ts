@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getLeaderboard } from '@/lib/db'
 
-export const revalidate = 30  // cache 30 seconds
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {

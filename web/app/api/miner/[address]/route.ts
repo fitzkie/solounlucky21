@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMinerStats } from '@/lib/db'
 
-export const revalidate = 30
+export const dynamic = 'force-dynamic'
 
 export async function GET(
   _req: NextRequest,
