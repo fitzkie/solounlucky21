@@ -9,14 +9,19 @@ function getPool(): Pool {
     const url = process.env.DATABASE_URL
     if (!url) throw new Error('DATABASE_URL environment variable is not set')
 
-    // Strip sslmode from the URL — pg v8 maps sslmode=require to
-    // rejectUnauthorized:true which rejects self-signed VPS certs.
-    // We set ssl directly so pg uses our config, not the URL param.
-    const cleanUrl = url.replace(/[?&]sslmode=[^&]*/g, '').replace(/[?&]$/, '')
+    // Parse manually — pg v8 infers ssl options from the URL's sslmode param
+    // and overrides whatever we pass in the config object, so we avoid
+    // connectionString entirely and hand pg individual params instead.
+    const parsed = new URL(url)
+    const noSsl = process.env.DATABASE_NO_SSL === 'true'
 
     pool = new Pool({
-      connectionString: cleanUrl,
-      ssl: process.env.DATABASE_NO_SSL === 'true' ? false : { rejectUnauthorized: false },
+      host:     parsed.hostname,
+      port:     Number(parsed.port) || 5432,
+      database: parsed.pathname.replace(/^\//, ''),
+      user:     decodeURIComponent(parsed.username),
+      password: decodeURIComponent(parsed.password),
+      ssl: noSsl ? false : { rejectUnauthorized: false },
       max: 5,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
