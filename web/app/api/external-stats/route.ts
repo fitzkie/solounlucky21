@@ -9,6 +9,7 @@ export async function GET() {
     return NextResponse.json(stats)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
+    console.error('external-stats API error:', msg)
     return NextResponse.json({ error: 'Failed to load external stats', detail: msg }, { status: 500 })
   }
 }
