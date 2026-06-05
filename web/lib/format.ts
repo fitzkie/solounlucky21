@@ -10,6 +10,7 @@ export function truncate(addr: string, front = 10, back = 8): string {
 
 export function timeAgo(date: Date | string): string {
   const secs = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
+  if (secs < 0) return 'just now'
   if (secs < 60) return `${secs}s ago`
   if (secs < 3600) return `${Math.floor(secs / 60)}m ago`
   if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`
