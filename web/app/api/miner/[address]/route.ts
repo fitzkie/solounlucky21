@@ -5,9 +5,9 @@ export const revalidate = 30
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { address: string } }
+  { params }: { params: Promise<{ address: string }> }
 ) {
-  const { address } = params
+  const { address } = await params
 
   if (!address || address.length < 10) {
     return NextResponse.json({ error: 'Invalid address' }, { status: 400 })
