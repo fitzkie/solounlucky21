@@ -64,7 +64,7 @@ export default async function MinerDetailPage({
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">{row.count}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-yellow-400/70">
-                      {BigInt(row.best).toLocaleString()}
+                      {BigInt(row.best ?? '0').toLocaleString()}
                     </td>
                   </tr>
                 ))}
