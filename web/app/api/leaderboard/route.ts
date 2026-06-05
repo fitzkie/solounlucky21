@@ -8,7 +8,8 @@ export async function GET() {
     const entries = await getLeaderboard()
     return NextResponse.json({ entries, updatedAt: new Date().toISOString() })
   } catch (err) {
-    console.error('leaderboard API error:', err)
-    return NextResponse.json({ error: 'Failed to load leaderboard' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('leaderboard API error:', msg)
+    return NextResponse.json({ error: 'Failed to load leaderboard', detail: msg }, { status: 500 })
   }
 }
