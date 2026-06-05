@@ -1,22 +1,7 @@
 import { getLeaderboard, getPoolStats } from '@/lib/db'
+import { formatBTC, truncate, timeAgo } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
-
-function formatBTC(sats: number): string {
-  return (sats / 100_000_000).toFixed(4) + ' BTC'
-}
-
-function truncate(addr: string): string {
-  return addr.length > 20 ? addr.slice(0, 10) + '…' + addr.slice(-8) : addr
-}
-
-function timeAgo(date: Date): string {
-  const secs = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
-  if (secs < 60) return `${secs}s ago`
-  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`
-  return `${Math.floor(secs / 86400)}d ago`
-}
 
 export default async function HomePage() {
   const [leaderboard, stats] = await Promise.all([getLeaderboard(), getPoolStats()])
