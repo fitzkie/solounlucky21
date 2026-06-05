@@ -63,23 +63,23 @@ done
 echo "=== [2b] Patching datum_stratum for finder-address personalization ==="
 python3 "$REPO_DIR/infra/patch-stratum.py"
 
-# Ensure datum_gateway routes submitblock through the signet-signer proxy (port 38335)
-# so blocks are signed before submission.  Direct connection to 38332 produces
-# bad-signet-blksig rejections.
-echo "=== [2c] Ensuring datum_gateway uses signet-signer proxy ==="
+# Ensure datum_gateway talks directly to Bitcoin Core (38332).
+# signetchallenge=51 (OP_TRUE) needs no signing proxy — routing through the
+# signet-signer at 38335 corrupts the coinbase and causes bad-signet-blksig.
+echo "=== [2c] Ensuring datum_gateway uses direct Bitcoin Core RPC (38332) ==="
 python3 -c "
 import json
 cfg = '/etc/unlucky21/datum-gateway.json'
 with open(cfg) as f:
     d = json.load(f)
 current = d.get('bitcoind', {}).get('rpcurl', '')
-if '38335' not in current:
-    d['bitcoind']['rpcurl'] = 'http://127.0.0.1:38335'
+if '38332' not in current:
+    d['bitcoind']['rpcurl'] = 'http://127.0.0.1:38332'
     with open(cfg, 'w') as f:
         json.dump(d, f, indent=2)
-    print('  Updated rpcurl to signet-signer proxy (38335)')
+    print('  Updated rpcurl to direct Bitcoin Core (38332)')
 else:
-    print('  rpcurl already points to signet-signer proxy — skipping')
+    print('  rpcurl already points to Bitcoin Core directly — skipping')
 "
 
 # ─── 3. Rebuild datum_gateway ─────────────────────────────────────────────────
