@@ -5,11 +5,17 @@
 :root {
   --background: #0a0a0a;
   --foreground: #ededed;
-  --gold: #D4A017;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
