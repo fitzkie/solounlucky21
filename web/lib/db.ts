@@ -157,7 +157,7 @@ export async function getPoolStats(): Promise<PoolStats> {
 }
 
 export interface ExtendedPoolStats extends PoolStats {
-  acceptedSharesTotal: number
+  acceptedSharesTotal: string
   bestShareEver: string        // decimal string — BigInt safe
   minTop21Share: string | null // null if fewer than 21 miners in leaderboard
   poolHashrateHs: number       // estimated from last 10 minutes of shares
@@ -179,6 +179,7 @@ export async function getExtendedPoolStats(): Promise<ExtendedPoolStats> {
        FROM shares
        WHERE submitted_at > NOW() - INTERVAL '7 days'
          AND is_stale = false
+         AND round_id = (SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1)
        GROUP BY btc_address
      ),
      ranked AS (
@@ -199,7 +200,7 @@ export async function getExtendedPoolStats(): Promise<ExtendedPoolStats> {
   const row = result.rows[0]
   return {
     ...base,
-    acceptedSharesTotal: parseInt(row.accepted_total ?? '0', 10),
+    acceptedSharesTotal: row.accepted_total ?? '0',
     bestShareEver: row.best_ever ?? '0',
     minTop21Share: row.min_top21 ?? null,
     poolHashrateHs: parseFloat(row.pool_hashrate_hs ?? '0'),
