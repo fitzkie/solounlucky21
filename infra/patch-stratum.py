@@ -101,9 +101,15 @@ patch_file(
 # This target string appears exactly once in send_mining_notify.
 # (The block-assembly section below also has a cb->coinb2 reference but it is
 #  in the memcpy path, not the send path, so the strings differ.)
+#
+# v2: adds _personal_cb2_new flag so that when personal coinb2 is first built
+# for a job, clean_jobs=true is forced — preventing a merkle-root mismatch
+# caused by the miner mining against the shared coinb2 while datum_gateway
+# assembles the block with the personal coinb2.
 COINB2_SEND_TARGET = "\tdatum_socket_send_string_to_client(c, cb->coinb2);"
 
-COINB2_SEND_REPLACEMENT = (
+# If the old v1 patch (without _personal_cb2_new) is already applied, upgrade it.
+COINB2_SEND_TARGET_V1 = (
     "\t/* Unlucky21: use per-miner personalized coinb2 (finder slot = miner address) */\n"
     "\t{\n"
     "\t\tconst char *coinb2_to_send = cb->coinb2;\n"
@@ -137,12 +143,93 @@ COINB2_SEND_REPLACEMENT = (
     "\t}\n"
 )
 
+COINB2_SEND_REPLACEMENT = (
+    "\t/* Unlucky21: use per-miner personalized coinb2 (finder slot = miner address) */\n"
+    "\t/* v2: _personal_cb2_new forces clean_jobs=true on first build to prevent */\n"
+    "\t/* merkle-root mismatch when miner was mining against the shared coinb2.   */\n"
+    "\tbool _personal_cb2_new = false;\n"
+    "\t{\n"
+    "\t\tconst char *coinb2_to_send = cb->coinb2;\n"
+    "\t\tif (!new_block && m->last_auth_username[0] != '\\0' &&\n"
+    "\t\t\t\tj->available_coinbase_outputs_count > 0) {\n"
+    "\t\t\tif (!m->personal_coinb2_valid ||\n"
+    "\t\t\t\t\tm->personal_coinb2_job_index != j->global_index) {\n"
+    "\t\t\t\tchar _btc[REWARD_ADDR_LEN] = {0};\n"
+    "\t\t\t\tconst char *_dot = strchr(m->last_auth_username, '.');\n"
+    "\t\t\t\tif (_dot) {\n"
+    "\t\t\t\t\tsize_t _n = (size_t)(_dot - m->last_auth_username);\n"
+    "\t\t\t\t\tif (_n >= REWARD_ADDR_LEN) _n = REWARD_ADDR_LEN - 1;\n"
+    "\t\t\t\t\tmemcpy(_btc, m->last_auth_username, _n);\n"
+    "\t\t\t\t} else {\n"
+    "\t\t\t\t\tstrncpy(_btc, m->last_auth_username, REWARD_ADDR_LEN - 1);\n"
+    "\t\t\t\t}\n"
+    "\t\t\t\tm->personal_coinb2_valid =\n"
+    "\t\t\t\t\tdatum_generate_personal_coinb2(j, _btc,\n"
+    "\t\t\t\t\t\tm->personal_coinb2,\n"
+    "\t\t\t\t\t\tm->personal_coinb2_bin,\n"
+    "\t\t\t\t\t\t&m->personal_coinb2_len) > 0;\n"
+    "\t\t\t\tm->personal_coinb2_job_index = j->global_index;\n"
+    "\t\t\t\tif (m->personal_coinb2_valid) _personal_cb2_new = true;\n"
+    "\t\t\t\tDLOG_DEBUG(\"Personal coinb2 %s for %s (job %d)\",\n"
+    "\t\t\t\t\tm->personal_coinb2_valid ? \"built\" : \"failed\",\n"
+    "\t\t\t\t\t_btc, j->global_index);\n"
+    "\t\t\t}\n"
+    "\t\t\tif (m->personal_coinb2_valid)\n"
+    "\t\t\t\tcoinb2_to_send = m->personal_coinb2;\n"
+    "\t\t}\n"
+    "\t\tdatum_socket_send_string_to_client(c, coinb2_to_send);\n"
+    "\t}\n"
+)
+
+with open(STRATUM_C) as f:
+    sc_tmp = f.read()
+
+if "_personal_cb2_new" in sc_tmp:
+    print("[datum_stratum.c send_mining_notify personal coinb2] Already at v2 — skipping")
+elif COINB2_SEND_TARGET_V1 in sc_tmp:
+    # Upgrade v1 → v2
+    sc_tmp = sc_tmp.replace(COINB2_SEND_TARGET_V1, COINB2_SEND_REPLACEMENT, 1)
+    with open(STRATUM_C, "w") as f:
+        f.write(sc_tmp)
+    print("[datum_stratum.c send_mining_notify personal coinb2] Upgraded v1 → v2 (clean_jobs fix)")
+elif COINB2_SEND_TARGET in sc_tmp:
+    sc_tmp = sc_tmp.replace(COINB2_SEND_TARGET, COINB2_SEND_REPLACEMENT, 1)
+    with open(STRATUM_C, "w") as f:
+        f.write(sc_tmp)
+    print("[datum_stratum.c send_mining_notify personal coinb2] Patched (v2)")
+else:
+    print(f"ERROR: Could not find coinb2 send target in {STRATUM_C}")
+    import sys; sys.exit(1)
+
+
+# ─── 3b. datum_stratum.c: force clean_jobs=true when personal coinb2 is new ──
+# When _personal_cb2_new=true, the miner must restart work against the
+# personal coinb2.  Without this, the miner could submit a block found
+# against the old shared coinb2 while we assemble with personal coinb2,
+# causing a merkle-root mismatch and silent block rejection.
+
+CLEAN_JOBS_TARGET = (
+    "\tif ((clean) || (quickdiff) || (new_block)) {\n"
+    "\t\tdatum_socket_send_string_to_client(c, \"true]}\\" + "n\");\n"
+    "\t} else {\n"
+    "\t\tdatum_socket_send_string_to_client(c, \"false]}\\" + "n\");\n"
+    "\t}\n"
+)
+
+CLEAN_JOBS_REPLACEMENT = (
+    "\tif ((clean) || (quickdiff) || (new_block) || _personal_cb2_new) {\n"
+    "\t\tdatum_socket_send_string_to_client(c, \"true]}\\" + "n\");\n"
+    "\t} else {\n"
+    "\t\tdatum_socket_send_string_to_client(c, \"false]}\\" + "n\");\n"
+    "\t}\n"
+)
+
 patch_file(
     STRATUM_C,
-    COINB2_SEND_TARGET,
-    COINB2_SEND_REPLACEMENT,
-    "coinb2_to_send",
-    "datum_stratum.c send_mining_notify personal coinb2",
+    CLEAN_JOBS_TARGET,
+    CLEAN_JOBS_REPLACEMENT,
+    "_personal_cb2_new) {",
+    "datum_stratum.c clean_jobs force on personal coinb2 build",
 )
 
 
