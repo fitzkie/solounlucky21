@@ -3,9 +3,17 @@ package coinbase
 import "fmt"
 
 const (
-	FinderAmountSats int64   = 50_000_000
-	PoolFeePercent   float64 = 0.02
-	MaxRankedSlots   int     = 21
+	// Unlucky21 reward model (v2):
+	// - Finder:   2.1% of total block reward (scales with fees, not a fixed lottery prize)
+	// - Pool fee: 2.1% of total block reward
+	// - Top 21:  95.8% split equally — the leaderboard IS the prize
+	//
+	// If the finder is also in the top 21 they collect both slots.
+	// At 3.125 BTC subsidy: finder ~0.066 BTC, each ranked slot ~0.143 BTC.
+	FinderPercent  float64 = 0.021
+	PoolFeePercent float64 = 0.021
+	MaxRankedSlots int     = 21
+
 	// Pool fee address — tb1q signet, update to mainnet bc1q before launch
 	PoolFeeAddress = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"
 )
@@ -24,9 +32,9 @@ type CoinbaseOutput struct {
 // BuildOutputs constructs the ordered coinbase output list.
 //
 // Slot layout:
-//   - Index 0        : finder bonus (fixed FinderAmountSats = 50M sats)
-//   - Index 1..N     : top-N ranked miners (N = min(len(ranked), MaxRankedSlots))
-//   - Index N+1      : pool fee address (exactly 2% of total + unfilled-slot sats + dust)
+//   - Index 0      : finder bonus (2.1% of total — scales with block reward)
+//   - Index 1..N   : top-N ranked miners (N = min(len(ranked), MaxRankedSlots))
+//   - Index N+1    : pool fee address (2.1% of total + unfilled slots + dust)
 //
 // All output amounts sum to exactly subsidySats + feesSats.
 // Panics if the invariant is violated (belt-and-suspenders for a financial function).
@@ -37,10 +45,11 @@ func BuildOutputs(
 ) []CoinbaseOutput {
 	total := subsidySats + feesSats
 
-	// 2% pool fee — float only for the percentage calculation; result is int64.
-	poolFeeBase := int64(float64(total) * PoolFeePercent)
+	// Finder and pool fee are each 2.1% of the total block reward.
+	finderAmount := int64(float64(total) * FinderPercent)
+	poolFeeBase  := int64(float64(total) * PoolFeePercent)
 
-	remaining := total - FinderAmountSats - poolFeeBase
+	remaining := total - finderAmount - poolFeeBase
 
 	perSlot := remaining / int64(MaxRankedSlots)
 	dust := remaining - (perSlot * int64(MaxRankedSlots))
@@ -58,10 +67,10 @@ func BuildOutputs(
 	// Build output slice: finder + filledSlots ranked + pool fee.
 	outputs := make([]CoinbaseOutput, 0, filledSlots+2)
 
-	// Slot 0: finder bonus
+	// Slot 0: finder bonus (2.1% of block reward)
 	outputs = append(outputs, CoinbaseOutput{
 		Address:    minerAddress,
-		AmountSats: FinderAmountSats,
+		AmountSats: finderAmount,
 	})
 
 	// Slots 1..filledSlots: ranked miners

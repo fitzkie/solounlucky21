@@ -41,12 +41,13 @@ func TestFull21MinersSubsidyOnly(t *testing.T) {
 		t.Fatalf("total mismatch: got %d, want %d", got, total)
 	}
 
-	// Slot 1 (index 0) is the finder bonus
+	// Slot 1 (index 0) is the finder bonus (2.1% of total)
+	finderWant := int64(float64(total) * coinbase.FinderPercent)
 	if outputs[0].Address != finder {
 		t.Errorf("slot 1 address: got %q, want %q", outputs[0].Address, finder)
 	}
-	if outputs[0].AmountSats != coinbase.FinderAmountSats {
-		t.Errorf("slot 1 amount: got %d, want %d", outputs[0].AmountSats, coinbase.FinderAmountSats)
+	if outputs[0].AmountSats != finderWant {
+		t.Errorf("slot 1 amount: got %d, want %d", outputs[0].AmountSats, finderWant)
 	}
 
 	// Pool fee is last output
@@ -56,8 +57,8 @@ func TestFull21MinersSubsidyOnly(t *testing.T) {
 	}
 
 	// All 21 ranked slots must have the same per-slot amount
-	poolFeeBase := int64(float64(total) * 0.02)
-	remaining := total - coinbase.FinderAmountSats - poolFeeBase
+	poolFeeBase := int64(float64(total) * coinbase.PoolFeePercent)
+	remaining := total - finderWant - poolFeeBase
 	perSlot := remaining / int64(coinbase.MaxRankedSlots)
 
 	for i := 1; i <= 21; i++ {
@@ -119,8 +120,9 @@ func TestOnly5MinersRanked(t *testing.T) {
 	}
 
 	// Pool fee gets base + unfilled slots' worth + dust
-	poolFeeBase := int64(float64(total) * 0.02)
-	remaining := total - coinbase.FinderAmountSats - poolFeeBase
+	finderAmt := int64(float64(total) * coinbase.FinderPercent)
+	poolFeeBase := int64(float64(total) * coinbase.PoolFeePercent)
+	remaining := total - finderAmt - poolFeeBase
 	perSlot := remaining / int64(coinbase.MaxRankedSlots)
 	dust := remaining - (perSlot * int64(coinbase.MaxRankedSlots))
 	filledSlots := int64(5)
@@ -158,8 +160,8 @@ func TestZeroMiners(t *testing.T) {
 	}
 
 	// Slot 0 is finder
-	if outputs[0].AmountSats != coinbase.FinderAmountSats {
-		t.Errorf("finder amount: got %d, want %d", outputs[0].AmountSats, coinbase.FinderAmountSats)
+	if outputs[0].AmountSats != int64(float64(total) * coinbase.FinderPercent) {
+		t.Errorf("finder amount: got %d, want %d", outputs[0].AmountSats, int64(float64(total) * coinbase.FinderPercent))
 	}
 	// Slot 1 is pool fee
 	if outputs[1].Address != coinbase.PoolFeeAddress {
@@ -192,8 +194,8 @@ func TestFinderIsAlsoRankOne(t *testing.T) {
 	if outputs[0].Address != finder {
 		t.Errorf("slot 0 address: got %q, want %q", outputs[0].Address, finder)
 	}
-	if outputs[0].AmountSats != coinbase.FinderAmountSats {
-		t.Errorf("slot 0 amount: got %d, want %d", outputs[0].AmountSats, coinbase.FinderAmountSats)
+	if outputs[0].AmountSats != int64(float64(total) * coinbase.FinderPercent) {
+		t.Errorf("slot 0 amount: got %d, want %d", outputs[0].AmountSats, int64(float64(total) * coinbase.FinderPercent))
 	}
 
 	// Slot 1 (ranked[0]) is also the finder's address
