@@ -35,9 +35,10 @@ function getPool(): Pool {
 export interface LeaderboardEntry {
   rank: number
   btcAddress: string
-  bestShare: string        // decimal string — *big.Int safe
+  bestShare: string
   lastSeen: Date
   estimatedPayoutSats: number
+  hashrate7dThs: number    // estimated 7-day hashrate in TH/s
 }
 
 export interface PoolStats {
@@ -84,10 +85,9 @@ function calcPayouts(subsidySats: number, feesSats: number, filledSlots: number)
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
-export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
+export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
   const db = getPool()
 
-  // Current active round
   const roundRow = await db.query<{ id: number }>(
     `SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1`
   )
@@ -99,20 +99,22 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
     best_share: string
     last_seen: Date
     rank: number
+    hashrate_7d_hs: string
   }>(
     `SELECT
        btc_address,
-       MAX(share_difficulty)::TEXT AS best_share,
-       MAX(submitted_at)           AS last_seen,
-       RANK() OVER (ORDER BY MAX(share_difficulty) DESC)::INT AS rank
+       MAX(share_difficulty)::TEXT                                   AS best_share,
+       MAX(submitted_at)                                             AS last_seen,
+       RANK() OVER (ORDER BY MAX(share_difficulty) DESC)::INT        AS rank,
+       (SUM(share_difficulty) * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs
      FROM shares
      WHERE round_id = $1
        AND submitted_at > NOW() - INTERVAL '7 days'
        AND is_stale = false
      GROUP BY btc_address
      ORDER BY MAX(share_difficulty) DESC
-     LIMIT 21`,
-    [roundId]
+     LIMIT $2`,
+    [roundId, limit]
   )
 
   const { perSlot } = calcPayouts(SUBSIDY_SATS, 0, result.rows.length)
@@ -123,6 +125,7 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
     bestShare: row.best_share,
     lastSeen: row.last_seen,
     estimatedPayoutSats: perSlot,
+    hashrate7dThs: parseFloat(row.hashrate_7d_hs) / 1e12,
   }))
 }
 
@@ -150,6 +153,57 @@ export async function getPoolStats(): Promise<PoolStats> {
     activeMiners7d: parseInt(row.active_miners_7d ?? '0', 10),
     currentRoundStarted: row.round_started,
     latestBlockHeight: row.latest_height ?? null,
+  }
+}
+
+export interface ExtendedPoolStats extends PoolStats {
+  acceptedSharesTotal: number
+  bestShareEver: string        // decimal string — BigInt safe
+  minTop21Share: string | null // null if fewer than 21 miners in leaderboard
+  poolHashrateHs: number       // estimated from last 10 minutes of shares
+}
+
+export async function getExtendedPoolStats(): Promise<ExtendedPoolStats> {
+  const db = getPool()
+  const base = await getPoolStats()
+
+  const result = await db.query<{
+    accepted_total: string
+    best_ever: string
+    min_top21: string | null
+    pool_hashrate_hs: string
+  }>(
+    `WITH best_per_address AS (
+       SELECT btc_address,
+              MAX(share_difficulty) AS best_share
+       FROM shares
+       WHERE submitted_at > NOW() - INTERVAL '7 days'
+         AND is_stale = false
+         AND round_id = (SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1)
+       GROUP BY btc_address
+     ),
+     ranked AS (
+       SELECT best_share,
+              RANK() OVER (ORDER BY best_share DESC) AS rnk
+       FROM best_per_address
+     )
+     SELECT
+       (SELECT COUNT(*)::TEXT FROM shares WHERE is_stale = false)          AS accepted_total,
+       (SELECT MAX(share_difficulty)::TEXT FROM shares)                    AS best_ever,
+       (SELECT MIN(best_share)::TEXT FROM ranked WHERE rnk <= 21)          AS min_top21,
+       (SELECT (COALESCE(SUM(share_difficulty), 0) * 4294967296.0 / 600)::TEXT
+          FROM shares
+          WHERE submitted_at > NOW() - INTERVAL '10 minutes'
+            AND is_stale = false)                                           AS pool_hashrate_hs`
+  )
+
+  const row = result.rows[0]
+  return {
+    ...base,
+    acceptedSharesTotal: parseInt(row.accepted_total ?? '0', 10),
+    bestShareEver: row.best_ever ?? '0',
+    minTop21Share: row.min_top21 ?? null,
+    poolHashrateHs: parseFloat(row.pool_hashrate_hs ?? '0'),
   }
 }
 

@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const entries = await getLeaderboard()
+    const entries = await getLeaderboard(100)
     return NextResponse.json({ entries, updatedAt: new Date().toISOString() })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
-import { getPoolStats } from '@/lib/db'
+import { getExtendedPoolStats } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const stats = await getPoolStats()
+    const stats = await getExtendedPoolStats()
     return NextResponse.json(stats)
   } catch (err) {
-    console.error('stats API error:', err)
-    return NextResponse.json({ error: 'Failed to load stats' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('stats API error:', msg)
+    return NextResponse.json({ error: 'Failed to load stats', detail: msg }, { status: 500 })
   }
 }
