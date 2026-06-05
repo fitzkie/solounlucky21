@@ -110,7 +110,7 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
        AND submitted_at > NOW() - INTERVAL '7 days'
        AND is_stale = false
      GROUP BY btc_address
-     ORDER BY best_share::NUMERIC DESC
+     ORDER BY MAX(share_difficulty) DESC
      LIMIT 21`,
     [roundId]
   )
