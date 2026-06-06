@@ -8,6 +8,9 @@ export default async function BlocksPage() {
 
   return (
     <div className="space-y-6">
+      <div className="max-w-4xl">
+        <img src="/banner2.png" alt="Unlucky21 — Don't Find The Block. Make The List." className="w-full h-auto rounded-xl" />
+      </div>
       <div>
         <h1 className="text-3xl font-black">Recent Blocks</h1>
         <p className="text-white/40 text-sm mt-1">Blocks found by the Unlucky21 pool.</p>
@@ -16,7 +19,7 @@ export default async function BlocksPage() {
       {blocks.length === 0 ? (
         <div className="rounded-xl border border-white/10 p-16 text-center space-y-3">
           <div className="text-5xl font-black text-white/10">0</div>
-          <p className="text-white/30 text-sm">No blocks found yet.</p>
+          <p className="text-white/30 text-sm">Unlucky21 has not found any blocks…. YET</p>
           <p className="text-white/20 text-xs">Be the first — connect your miner.</p>
           <a href="/connect" className="inline-block mt-2 text-xs text-yellow-500 hover:text-yellow-400 transition-colors">
             How to connect →

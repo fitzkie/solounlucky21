@@ -38,14 +38,17 @@ const FAQS = [
     a: 'Your address is only used as a Stratum username. We never ask for your private key. Payouts go directly to your address in the coinbase transaction — we never hold any funds.',
   },
   {
-    q: 'What is signet?',
-    a: 'Signet is a Bitcoin test network with no real monetary value. We are currently running on signet to test the pool software before launching on mainnet. Use a signet address, not a mainnet address.',
+    q: 'Can I test on signet before using real hashrate?',
+    a: 'Yes. Signet is a Bitcoin test network with no real monetary value. See the Connect page — scroll to the bottom for signet connection details and instructions.',
   },
 ]
 
 export default function FaqPage() {
   return (
     <div className="max-w-3xl space-y-6">
+      <div className="max-w-4xl">
+        <img src="/banner2.png" alt="Unlucky21 — Don't Find The Block. Make The List." className="w-full h-auto rounded-xl" />
+      </div>
       <div>
         <h1 className="text-3xl font-black">FAQ</h1>
         <p className="text-white/40 text-sm mt-2">Frequently asked questions.</p>

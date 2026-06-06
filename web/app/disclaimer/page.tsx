@@ -14,6 +14,9 @@ function Risk({ emoji, title, children }: { emoji: string; title: string; childr
 export default function DisclaimerPage() {
   return (
     <div className="max-w-3xl space-y-8">
+      <div className="max-w-4xl">
+        <img src="/banner2.png" alt="Unlucky21 — Don't Find The Block. Make The List." className="w-full h-auto rounded-xl" />
+      </div>
       <div>
         <h1 className="text-3xl font-black">Transparency &amp; Disclaimer</h1>
         <div className="mt-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 px-5 py-4 text-sm text-yellow-400 leading-relaxed">
@@ -57,8 +60,7 @@ export default function DisclaimerPage() {
           <p>If your address submitted a best share just seconds before a block was found, it will not get paid — because it was not yet included in the block template distributed to the miner&apos;s device. If your address has been in the list for more than a minute when a block is found, this issue will not affect you.</p>
         </Risk>
 
-        <Risk emoji="🎭" title="Malicious Pool Operator">
-          <p>The operator could silently inject fake entries into Best 21 — addresses they control with fabricated share values. There is no cryptographic proof that any submitted share is genuine. The leaderboard you see could be entirely real, partially fake, or completely fabricated. You have no way to tell.</p>
+        <Risk emoji="🎭" title="Pool Operator">
           <p>Unlucky21 has no fake entries, no fabricated shares, and no manipulation of any kind. Every address competed genuinely. But the only evidence of this is the operator&apos;s word.</p>
         </Risk>
 

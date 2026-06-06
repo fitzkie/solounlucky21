@@ -33,11 +33,15 @@ function FieldGrid({ fields }: { fields: { label: string; value: string }[] }) {
 export default function ConnectPage() {
   return (
     <div className="space-y-8 max-w-3xl">
+      <div className="max-w-4xl">
+        <img src="/banner2.png" alt="Unlucky21 — Don't Find The Block. Make The List." className="w-full h-auto rounded-xl" />
+      </div>
+
       <div>
         <h1 className="text-3xl font-black">Connect Your Miner</h1>
         <p className="text-white/40 text-sm mt-2">
-          Currently running on <strong className="text-yellow-400">signet (testnet)</strong>.
-          Use a signet Bitcoin address — not a mainnet address.
+          Currently running on <strong className="text-yellow-400">Mainnet</strong>.
+          Use your Bitcoin mainnet address as your username.
         </p>
       </div>
 
@@ -46,7 +50,7 @@ export default function ConnectPage() {
         <div className="grid md:grid-cols-3 gap-4">
           {[
             { label: 'Stratum URL', value: 'stratum+tcp://bitcoin.unlucky21.com:3333' },
-            { label: 'Username',    value: 'your_signet_btc_address' },
+            { label: 'Username',    value: 'your_btc_address' },
             { label: 'Password',    value: 'x  (anything)' },
           ].map(item => (
             <div key={item.label}>
@@ -71,7 +75,7 @@ export default function ConnectPage() {
         <FieldGrid fields={[
           { label: 'Hostname',  value: 'bitcoin.unlucky21.com' },
           { label: 'Port',      value: '3333' },
-          { label: 'Username',  value: 'your_signet_address' },
+          { label: 'Username',  value: 'your_btc_address' },
           { label: 'Password',  value: 'x' },
         ]} />
         <p className="text-white/50">4. Click <strong className="text-white">Save</strong> — Bitaxe reconnects automatically.</p>
@@ -83,13 +87,13 @@ export default function ConnectPage() {
           <li>Go to <strong className="text-white">Pool Settings</strong></li>
           <li>Set Pool 1:</li>
         </ol>
-        <CodeBlock>{`URL:      stratum+tcp://bitcoin.unlucky21.com:3333\nWorker:   your_signet_btc_address\nPassword: x`}</CodeBlock>
+        <CodeBlock>{`URL:      stratum+tcp://bitcoin.unlucky21.com:3333\nWorker:   your_btc_address\nPassword: x`}</CodeBlock>
         <p className="text-white/50">4. Save and restart the device.</p>
       </HardwareSection>
 
       <HardwareSection title="cpuminer (CPU / testing)">
         <p className="text-white/60">Run this command in your terminal:</p>
-        <CodeBlock>{`cpuminer -a sha256d \\\n  -o stratum+tcp://bitcoin.unlucky21.com:3333 \\\n  -u YOUR_SIGNET_BTC_ADDRESS \\\n  -p x`}</CodeBlock>
+        <CodeBlock>{`cpuminer -a sha256d \\\n  -o stratum+tcp://bitcoin.unlucky21.com:3333 \\\n  -u YOUR_BTC_ADDRESS \\\n  -p x`}</CodeBlock>
         <p className="text-white/30 text-xs">
           CPU mining produces very low-difficulty shares. Good for testing connectivity — not competitive for the leaderboard.
         </p>
@@ -104,7 +108,7 @@ export default function ConnectPage() {
         </ol>
         <CodeBlock>{`stratum+tcp://bitcoin.unlucky21.com:3333`}</CodeBlock>
         <ol className="text-white/60 space-y-1.5 list-decimal list-inside" start={4}>
-          <li>Set username to your signet BTC address</li>
+          <li>Set username to your Bitcoin mainnet address</li>
           <li>Save and start the rental</li>
         </ol>
       </HardwareSection>
@@ -120,11 +124,41 @@ export default function ConnectPage() {
         <FieldGrid fields={[
           { label: 'Pool Host', value: 'bitcoin.unlucky21.com' },
           { label: 'Port',      value: '3333' },
-          { label: 'Username',  value: 'your_signet_address' },
+          { label: 'Username',  value: 'your_btc_address' },
           { label: 'Password',  value: 'x' },
         ]} />
         <p className="text-white/50">5. Place the order. Hash arrives at the pool within minutes.</p>
       </HardwareSection>
+
+      {/* ── Signet / Testnet section ── */}
+      <div id="signet" className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-4">
+        <h2 className="text-lg font-black text-white/60">Want to test on Signet (Testnet)?</h2>
+        <p className="text-white/40 text-sm">
+          Signet is a Bitcoin test network with no real monetary value. If you want to experiment
+          before committing real hashrate, connect to the signet endpoint below using a signet address.
+        </p>
+        <div className="grid md:grid-cols-3 gap-4">
+          {[
+            { label: 'Stratum URL', value: 'stratum+tcp://bitcoin.unlucky21.com:3333' },
+            { label: 'Username',    value: 'your_signet_address' },
+            { label: 'Password',    value: 'x  (anything)' },
+          ].map(item => (
+            <div key={item.label}>
+              <div className="text-white/40 text-xs mb-1">{item.label}</div>
+              <code className="bg-black/40 text-yellow-400/60 px-2 py-1.5 rounded text-xs font-mono block break-all">
+                {item.value}
+              </code>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-white/30 border-t border-white/10 pt-3">
+          Signet shares are tracked separately and do not appear on the mainnet leaderboard. Use a signet
+          Bitcoin address — signet addresses typically start with <code className="text-yellow-400/60">tb1q</code>.
+        </p>
+        <p className="text-xs text-white/20">
+          Get signet coins free from a faucet — search &ldquo;Bitcoin signet faucet&rdquo;. No mining hardware needed; a CPU miner is enough for testing.
+        </p>
+      </div>
     </div>
   )
 }

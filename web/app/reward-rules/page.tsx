@@ -12,6 +12,9 @@ function RuleSection({ title, children }: { title: string; children: React.React
 export default function RewardRulesPage() {
   return (
     <div className="max-w-3xl space-y-8">
+      <div className="max-w-4xl">
+        <img src="/banner2.png" alt="Unlucky21 — Don't Find The Block. Make The List." className="w-full h-auto rounded-xl" />
+      </div>
       <div>
         <h1 className="text-3xl font-black">Reward Rules</h1>
         <p className="text-white/40 text-sm mt-2">How payouts are calculated and distributed.</p>
@@ -52,12 +55,25 @@ export default function RewardRulesPage() {
           <p>Shares older than 7 days age out of the leaderboard. If you stop mining, your share expires and your rank drops. Mine occasionally to maintain your position.</p>
         </RuleSection>
 
+        <RuleSection title="Small Miners, Big Impact">
+          <p>Smaller miners punch above their weight at Unlucky21. A fleet of smaller machines under different addresses can hold multiple Best 21 slots simultaneously. More slots = more expected payout exposure per block found.</p>
+        </RuleSection>
+
         <RuleSection title="Leaderboard Reset">
           <p>The moment Unlucky21 finds a block, the leaderboard resets to zero. Every slot opens simultaneously. There is no carry-over between rounds.</p>
         </RuleSection>
 
         <RuleSection title="Soft Hashrate Cap">
-          <p>Addresses with an estimated 7-day hashrate above 100 TH/s are soft-capped. The cap increases by 100 TH/s each time the pool finds a block. Addresses below 100 TH/s receive a <strong className="text-yellow-400">HOME</strong> badge on the leaderboard — no effect on payouts, just a label.</p>
+          <p>We talked about a hashrate cap — but what can a mining pool actually do?</p>
+          <p>Addresses with an estimated 7-day hashrate above 100 TH/s are soft-capped. The cap increases by 100 TH/s each time the pool finds a block.</p>
+          <p>In practice, the pool can limit or throttle large miners through:</p>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong className="text-white">Score weighting:</strong> Shares from over-cap addresses receive a reduced difficulty multiplier for ranking, making it harder to hold a top slot relative to their raw hashrate.</li>
+            <li><strong className="text-white">Share acceptance throttling:</strong> The pool can limit how frequently it counts shares toward rank for over-cap addresses — shares are still accepted for connectivity and fair relay, but ranking contribution is capped.</li>
+            <li><strong className="text-white">Leaderboard labelling:</strong> Over-cap addresses are visible to everyone. Transparency is itself a form of accountability.</li>
+          </ul>
+          <p>The cap is "soft" because enforcement is at the pool level, not the protocol level. A determined large miner can split hashrate across multiple addresses to stay under the cap — and that&apos;s fine. The goal is to keep Best 21 accessible to small miners, not to exclude large ones.</p>
+          <p>Addresses below 100 TH/s receive a <strong className="text-yellow-400">HOME</strong> badge on the leaderboard — no effect on payouts, just a label.</p>
         </RuleSection>
 
         <RuleSection title="Payout Delivery">

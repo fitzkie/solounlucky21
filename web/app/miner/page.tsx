@@ -3,6 +3,9 @@ export const dynamic = 'force-dynamic'
 export default function MinerSearchPage() {
   return (
     <div className="max-w-xl space-y-8">
+      <div className="max-w-4xl">
+        <img src="/banner2.png" alt="Unlucky21 — Don't Find The Block. Make The List." className="w-full h-auto rounded-xl" />
+      </div>
       <div>
         <h1 className="text-3xl font-black">My Stats</h1>
         <p className="text-white/40 text-sm mt-2">
@@ -14,7 +17,7 @@ export default function MinerSearchPage() {
         <input
           id="addr-input"
           type="text"
-          placeholder="tb1q..."
+          placeholder="bc1q... or 1..."
           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-white placeholder:text-white/20 focus:outline-none focus:border-yellow-500/50"
         />
         <button

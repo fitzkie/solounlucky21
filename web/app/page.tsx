@@ -139,7 +139,7 @@ export default async function HomePage() {
         <div className="rounded-xl border border-white/10 p-6 grid md:grid-cols-3 gap-4">
           {[
             { label: 'Stratum URL', value: 'stratum+tcp://bitcoin.unlucky21.com:3333' },
-            { label: 'Username',    value: 'your_signet_btc_address' },
+            { label: 'Username',    value: 'your_btc_address' },
             { label: 'Password',    value: 'x  (anything)' },
           ].map(item => (
             <div key={item.label}>

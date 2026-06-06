@@ -27,6 +27,9 @@ export default async function StatsPage() {
 
   return (
     <div className="space-y-10">
+      <div className="max-w-4xl">
+        <img src="/banner2.png" alt="Unlucky21 — Don't Find The Block. Make The List." className="w-full h-auto rounded-xl" />
+      </div>
       <div>
         <h1 className="text-3xl font-black">Pool Stats</h1>
         <p className="text-white/40 text-sm mt-1">
@@ -58,7 +61,7 @@ export default async function StatsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xs font-bold uppercase tracking-widest text-white/40">Network (Signet)</h2>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-white/40">Network (Mainnet)</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <StatCard
             label="BTC Price"
