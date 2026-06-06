@@ -31,6 +31,26 @@ def patch_file(path, target, replacement, already_patched_marker, label):
     print(f"[{label}] Patched {os.path.basename(path)}")
 
 
+# ─── 0. datum_stratum.c: add #include "datum_reward_socket.h" ────────────────
+# datum_stratum.c uses REWARD_ADDR_LEN which is defined in datum_reward_socket.h.
+# The upstream CMakeLists.txt doesn't include this, so we patch it in.
+
+with open(STRATUM_C) as f:
+    sc0 = f.read()
+
+if '"datum_reward_socket.h"' in sc0:
+    print("[datum_stratum.c include] Already patched — skipping")
+else:
+    sc0 = sc0.replace(
+        '#include "datum_coinbaser.h"',
+        '#include "datum_coinbaser.h"\n#include "datum_reward_socket.h"',
+        1,
+    )
+    with open(STRATUM_C, "w") as f:
+        f.write(sc0)
+    print("[datum_stratum.c include] Added #include datum_reward_socket.h")
+
+
 # ─── 1. datum_coinbaser.h: declare datum_generate_personal_coinb2 ────────────
 # Inserted before the closing #endif so datum_stratum.c (which includes
 # datum_coinbaser.h) sees the declaration with the correct T_DATUM_STRATUM_JOB
