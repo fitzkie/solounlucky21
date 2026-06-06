@@ -14,8 +14,8 @@ const (
 	PoolFeePercent float64 = 0.021
 	MaxRankedSlots int     = 21
 
-	// Pool fee address — tb1q signet, update to mainnet bc1q before launch
-	PoolFeeAddress = "tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"
+	// Pool fee address — mainnet Legacy P2PKH (1DR9p...)
+	PoolFeeAddress = "1DR9pDLvFVnaJBRT5M4hUJLiuCQ7YE8D7b"
 )
 
 // RankedAddress holds the Bitcoin address of a ranked miner.
