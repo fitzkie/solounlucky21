@@ -139,7 +139,7 @@ export default function ConnectPage() {
         </p>
         <div className="grid md:grid-cols-3 gap-4">
           {[
-            { label: 'Stratum URL', value: 'stratum+tcp://bitcoin.unlucky21.com:3333' },
+            { label: 'Stratum URL', value: 'stratum+tcp://108.61.202.106:3333' },
             { label: 'Username',    value: 'your_signet_address' },
             { label: 'Password',    value: 'x  (anything)' },
           ].map(item => (
@@ -152,11 +152,11 @@ export default function ConnectPage() {
           ))}
         </div>
         <p className="text-xs text-white/30 border-t border-white/10 pt-3">
-          Signet shares are tracked separately and do not appear on the mainnet leaderboard. Use a signet
-          Bitcoin address — signet addresses typically start with <code className="text-yellow-400/60">tb1q</code>.
+          This is the dedicated signet test node — separate from mainnet. Signet shares do not appear on the mainnet leaderboard.
+          Use a signet Bitcoin address (starts with <code className="text-yellow-400/60">tb1q</code>).
         </p>
         <p className="text-xs text-white/20">
-          Get signet coins free from a faucet — search &ldquo;Bitcoin signet faucet&rdquo;. No mining hardware needed; a CPU miner is enough for testing.
+          CPU miner example: <code className="text-yellow-400/40">cpuminer -a sha256d -o stratum+tcp://108.61.202.106:3333 -u YOUR_SIGNET_ADDRESS -p x</code>
         </p>
       </div>
     </div>
