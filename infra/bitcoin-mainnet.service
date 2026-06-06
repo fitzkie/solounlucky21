@@ -1,0 +1,36 @@
+# systemd unit for Bitcoin Core — Unlucky21 mainnet node
+# Install to: /etc/systemd/system/bitcoin-unlucky21.service
+
+[Unit]
+Description=Bitcoin Core (mainnet) — Unlucky21
+After=network.target
+Documentation=https://bitcoin.org/en/bitcoin-core/
+
+[Service]
+User=unlucky21
+Group=unlucky21
+
+# bitcoind forks to the background via -daemon, so Type=forking is correct.
+Type=forking
+# Mainnet PID lives at the datadir root (no network subdirectory).
+PIDFile=/var/lib/unlucky21/bitcoin/bitcoind.pid
+
+ExecStart=/usr/local/bin/bitcoind \
+    -conf=/etc/unlucky21/bitcoin.conf \
+    -datadir=/var/lib/unlucky21/bitcoin
+
+ExecStop=/usr/local/bin/bitcoin-cli \
+    -conf=/etc/unlucky21/bitcoin.conf \
+    stop
+
+Restart=on-failure
+RestartSec=30
+
+# IBD and initial UTXO flush can take several minutes to start.
+TimeoutStartSec=600
+
+# Graceful shutdown flushes the UTXO cache to disk — allow plenty of time.
+TimeoutStopSec=600
+
+[Install]
+WantedBy=multi-user.target
