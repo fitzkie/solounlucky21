@@ -14,17 +14,19 @@ export default async function HomePage() {
 
       {/* ── Hero ── */}
       <section className="text-center py-12 space-y-5">
-        <div className="inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-full px-4 py-1.5 text-xs text-yellow-500 font-bold tracking-widest uppercase">
-          Beta · Signet Testnet
+        {/* Banner */}
+        <div className="max-w-4xl mx-auto">
+          <img
+            src="/banner.png"
+            alt="Unlucky21 Solo Pool — The Bitcoin Pool Where Finding The Block Doesn't Matter"
+            className="w-full h-auto"
+          />
         </div>
         <h1 className="text-4xl md:text-6xl font-black tracking-tight leading-none">
           DON&apos;T FIND THE BLOCK.
           <br />
           <span className="text-yellow-400">MAKE THE LIST.</span>
         </h1>
-        <p className="text-white/50 text-base md:text-lg max-w-xl mx-auto">
-          The Bitcoin Pool Where Finding The Block Doesn&apos;t Matter™
-        </p>
         <div className="flex justify-center gap-3 pt-2">
           <a
             href="https://t.me/unlucky21solopool"

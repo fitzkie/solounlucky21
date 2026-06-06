@@ -25,9 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="border-b border-white/10 px-4 py-3 sticky top-0 z-50 bg-black/95 backdrop-blur">
           <div className="max-w-6xl mx-auto flex items-center gap-4">
             <a href="/" className="flex items-center gap-2 shrink-0">
-              <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center text-yellow-500 font-black text-xs select-none">
-                U21
-              </div>
+              <img src="/logo.png" alt="Unlucky21" className="w-10 h-10 rounded-full" />
               <span className="font-black tracking-tight text-white text-sm hidden lg:block">UNLUCKY21</span>
             </a>
             <nav className="flex gap-0.5 text-xs overflow-x-auto scrollbar-none flex-1">
