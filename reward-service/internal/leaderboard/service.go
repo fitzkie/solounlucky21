@@ -167,8 +167,9 @@ func (s *Service) ResetForBlock(ctx context.Context, bf BlockFound) ([]Entry, in
 
 	// Compute per-slot amount using same formula as coinbase.BuildOutputs.
 	total := int64(312_500_000) + bf.FeesSats
+	finderAmount := int64(float64(total) * coinbase.FinderPercent)
 	poolFeeBase := int64(float64(total) * coinbase.PoolFeePercent)
-	remaining := total - coinbase.FinderAmountSats - poolFeeBase
+	remaining := total - finderAmount - poolFeeBase
 	perSlot := remaining / int64(coinbase.MaxRankedSlots)
 
 	// Build snapshot JSON array.
