@@ -45,8 +45,37 @@ export default function ConnectPage() {
         </p>
       </div>
 
+      {/* ── Port chooser ── */}
+      <div className="rounded-xl border border-white/10 overflow-hidden">
+        <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-white/10">
+          <div className="p-5 space-y-2 bg-yellow-500/5">
+            <div className="flex items-center gap-2">
+              <span className="text-yellow-400 font-black text-lg">:3333</span>
+              <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded px-2 py-0.5 font-bold">DIRECT</span>
+            </div>
+            <p className="text-white/60 text-xs leading-relaxed">
+              For home miners and dedicated hardware — Bitaxe, Avalon Nano, personal ASICs.
+              Difficulty auto-adjusts to your hashrate (vardiff).
+            </p>
+            <code className="block text-yellow-400 text-xs font-mono mt-1">bitcoin.unlucky21.com:3333</code>
+          </div>
+          <div className="p-5 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-white/70 font-black text-lg">:4444</span>
+              <span className="text-xs bg-white/10 text-white/50 border border-white/10 rounded px-2 py-0.5 font-bold">RENTALS</span>
+            </div>
+            <p className="text-white/40 text-xs leading-relaxed">
+              For hash rental services — NiceHash, Mining Rig Rentals, Braiins.
+              Higher minimum difficulty floor (1M) tuned for TH/s-scale hashrate.
+            </p>
+            <code className="block text-white/40 text-xs font-mono mt-1">bitcoin.unlucky21.com:4444</code>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Direct connection details ── */}
       <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-6 space-y-4">
-        <h2 className="text-lg font-black">Pool Connection Details</h2>
+        <h2 className="text-lg font-black">Direct Miners — Port 3333</h2>
         <div className="grid md:grid-cols-3 gap-4">
           {[
             { label: 'Stratum URL', value: 'stratum+tcp://bitcoin.unlucky21.com:3333' },
@@ -99,19 +128,28 @@ export default function ConnectPage() {
         </p>
       </HardwareSection>
 
-      <HardwareSection title="Braiins Pool (Hash Rental)">
-        <p className="text-white/60">Braiins allows you to rent hashrate and direct it to a custom pool.</p>
-        <ol className="text-white/60 space-y-1.5 list-decimal list-inside">
-          <li>Sign in at <a href="https://pool.braiins.com" className="text-yellow-400 hover:underline" target="_blank" rel="noopener noreferrer">pool.braiins.com</a></li>
-          <li>Go to <strong className="text-white">Settings → Worker Configuration</strong></li>
-          <li>Set custom pool endpoint:</li>
-        </ol>
-        <CodeBlock>{`stratum+tcp://bitcoin.unlucky21.com:3333`}</CodeBlock>
-        <ol className="text-white/60 space-y-1.5 list-decimal list-inside" start={4}>
-          <li>Set username to your Bitcoin mainnet address</li>
-          <li>Save and start the rental</li>
-        </ol>
-      </HardwareSection>
+      {/* ── Rental connection details ── */}
+      <div className="rounded-xl border border-white/10 bg-white/5 p-6 space-y-4">
+        <h2 className="text-lg font-black">Hash Rentals — Port 4444</h2>
+        <p className="text-white/50 text-sm">
+          Use port <strong className="text-white">4444</strong> when directing rented hashrate from NiceHash, Mining Rig Rentals, or Braiins.
+          This port has a higher minimum difficulty floor tuned for the TH/s-scale hashrate that rental services send.
+        </p>
+        <div className="grid md:grid-cols-3 gap-4">
+          {[
+            { label: 'Stratum URL', value: 'stratum+tcp://bitcoin.unlucky21.com:4444' },
+            { label: 'Username',    value: 'your_btc_address' },
+            { label: 'Password',    value: 'x  (anything)' },
+          ].map(item => (
+            <div key={item.label}>
+              <div className="text-white/40 text-xs mb-1">{item.label}</div>
+              <code className="bg-black/40 text-yellow-400 px-2 py-1.5 rounded text-xs font-mono block break-all">
+                {item.value}
+              </code>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <HardwareSection title="NiceHash (Hash Rental)">
         <p className="text-white/60">NiceHash lets you buy SHA-256 hashrate and point it at a custom pool.</p>
@@ -123,11 +161,41 @@ export default function ConnectPage() {
         </ol>
         <FieldGrid fields={[
           { label: 'Pool Host', value: 'bitcoin.unlucky21.com' },
-          { label: 'Port',      value: '3333' },
+          { label: 'Port',      value: '4444' },
           { label: 'Username',  value: 'your_btc_address' },
           { label: 'Password',  value: 'x' },
         ]} />
         <p className="text-white/50">5. Place the order. Hash arrives at the pool within minutes.</p>
+      </HardwareSection>
+
+      <HardwareSection title="Mining Rig Rentals (Hash Rental)">
+        <p className="text-white/60">Rent SHA-256 hashrate from Mining Rig Rentals and point it at Unlucky21.</p>
+        <ol className="text-white/60 space-y-1.5 list-decimal list-inside">
+          <li>Log in at <a href="https://www.miningrigrentals.com" className="text-yellow-400 hover:underline" target="_blank" rel="noopener noreferrer">miningrigrentals.com</a></li>
+          <li>Go to <strong className="text-white">My Pools</strong> and add a new pool</li>
+          <li>Enter the pool details:</li>
+        </ol>
+        <FieldGrid fields={[
+          { label: 'Host',     value: 'bitcoin.unlucky21.com' },
+          { label: 'Port',     value: '4444' },
+          { label: 'Username', value: 'your_btc_address' },
+          { label: 'Password', value: 'x' },
+        ]} />
+        <p className="text-white/50">4. Save and select as the pool when placing a rental order.</p>
+      </HardwareSection>
+
+      <HardwareSection title="Braiins Pool (Hash Rental)">
+        <p className="text-white/60">Braiins allows you to rent hashrate and direct it to a custom pool.</p>
+        <ol className="text-white/60 space-y-1.5 list-decimal list-inside">
+          <li>Sign in at <a href="https://pool.braiins.com" className="text-yellow-400 hover:underline" target="_blank" rel="noopener noreferrer">pool.braiins.com</a></li>
+          <li>Go to <strong className="text-white">Settings → Worker Configuration</strong></li>
+          <li>Set custom pool endpoint:</li>
+        </ol>
+        <CodeBlock>{`stratum+tcp://bitcoin.unlucky21.com:4444`}</CodeBlock>
+        <ol className="text-white/60 space-y-1.5 list-decimal list-inside" start={4}>
+          <li>Set username to your Bitcoin mainnet address</li>
+          <li>Save and start the rental</li>
+        </ol>
       </HardwareSection>
 
       {/* ── Signet / Testnet section ── */}
