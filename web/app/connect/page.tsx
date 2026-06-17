@@ -182,9 +182,31 @@ export default function ConnectPage() {
         ]} />
         <p className="text-white/50">4. Click <strong className="text-white">Add pool</strong> — MRR will test the connection first. If it says "unable to establish connection," wait 30 seconds and retry.</p>
         <p className="text-xs text-white/30 border-t border-white/10 pt-3">
-          MRR rigs arrive at TH/s scale. Use port <code className="text-yellow-400/70">4444</code> — it has a higher difficulty floor tuned for high hashrate.
+          MRR rigs arrive at TH/s scale. Use port <code className="text-yellow-400/70">4444</code> — vardiff starts at 256K and scales up automatically for high hashrate.
           Your address appears on the leaderboard automatically once shares arrive.
         </p>
+
+        <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4 space-y-3 mt-2">
+          <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest">Tips for a successful MRR rental</p>
+          <ul className="text-xs text-white/50 space-y-2">
+            <li className="flex gap-2">
+              <span className="text-yellow-500 mt-0.5">→</span>
+              <span><strong className="text-white">Don't change your BTC address mid-rental.</strong> MRR treats each address as a new pool connection and re-runs its acceptance test, delaying real hash by several minutes. Set it once and leave it for the full rental.</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-yellow-500 mt-0.5">→</span>
+              <span><strong className="text-white">Use a worker suffix to track sessions</strong> without changing your address — e.g. <code className="text-yellow-400/70">your_address.mrr1</code>, then <code className="text-yellow-400/70">.mrr2</code> for the next rental.</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-yellow-500 mt-0.5">→</span>
+              <span><strong className="text-white">Watch the MRR dashboard after 3–5 minutes.</strong> You should see accepted hashrate, not rejected. If the tooltip shows "Pool Rejected," stop the rental early — something is misconfigured.</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-yellow-500 mt-0.5">→</span>
+              <span><strong className="text-white">10–50 TH/s for 1–2 hours</strong> is plenty to confirm everything is working before committing to a longer rental. ASIC and ASICBoost rigs both work.</span>
+            </li>
+          </ul>
+        </div>
       </HardwareSection>
 
       <HardwareSection title="Braiins Pool (Hash Rental)">
