@@ -300,6 +300,58 @@ if "cb->coinb1_len+12+cb->coinb2_len" in sc:
     print("[datum_stratum.c] Replaced remaining coinb2_len references with coinb2_len_use")
 
 
+# ─── 5. datum_stratum.c: call datum_reward_share_submit on every accepted share ─
+# datum_reward_share_submit() is defined in datum_reward_socket.c but was never
+# wired into the share-acceptance path.  Insert it after the "accepted" JSON
+# is sent to the miner so every validated share (datum or solo) is recorded in
+# the Unlucky21 PostgreSQL database via the reward-service Unix socket.
+#
+# The target is uniquely identified by the send_string call followed by
+# "// update connection totals" — the auth-accept path that looks similar
+# is followed by "m->authorized = true" instead.
+
+with open(STRATUM_C) as f:
+    sc5 = f.read()
+
+if "datum_reward_share_submit(username_s" in sc5:
+    print("[datum_stratum.c share submit] Already patched — skipping")
+else:
+    # Match uniquely: accepted-share send followed by connection-totals comment.
+    # The blank line between them contains a tab (\t\n) in the upstream source.
+    _t5 = (
+        "datum_socket_send_string_to_client(c, s);\n"
+        "\t\n"
+        "\t// update connection totals\n"
+        "\tm->share_diff_accepted += job_diff;\n"
+        "\tm->share_count_accepted++;"
+    )
+    # Fallback: blank line may be bare \n on some versions
+    _t5_alt = _t5.replace("\t\n", "\n")
+
+    _r5 = (
+        "datum_socket_send_string_to_client(c, s);\n"
+        "\n"
+        "\t/* Unlucky21: record every accepted share in reward-service DB */\n"
+        "\tdatum_reward_share_submit(username_s, job_diff, 0);\n"
+        "\t\n"
+        "\t// update connection totals\n"
+        "\tm->share_diff_accepted += job_diff;\n"
+        "\tm->share_count_accepted++;"
+    )
+
+    if _t5 in sc5:
+        sc5 = sc5.replace(_t5, _r5, 1)
+    elif _t5_alt in sc5:
+        sc5 = sc5.replace(_t5_alt, _r5.replace("\t\n", "\n"), 1)
+    else:
+        print(f"ERROR: share-submit target not found in {STRATUM_C}")
+        sys.exit(1)
+
+    with open(STRATUM_C, "w") as f:
+        f.write(sc5)
+    print("[datum_stratum.c share submit] Patched — datum_reward_share_submit wired in")
+
+
 print()
 print("All patches applied.  Rebuild datum_gateway:")
 print(f"  cd {BUILD_DIR} && make -j$(nproc)")
