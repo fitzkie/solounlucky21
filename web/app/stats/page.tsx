@@ -71,12 +71,12 @@ export default async function StatsPage() {
           <StatCard
             label="Network Hashrate"
             value={ext.networkHashrateHs ? formatHashrate(ext.networkHashrateHs) : '—'}
-            sub="signet · mempool.space"
+            sub="mainnet · mempool.space"
           />
           <StatCard
             label="Network Difficulty"
             value={netDiff ? netDiff.toLocaleString() : '—'}
-            sub="signet"
+            sub="mainnet"
           />
         </div>
       </section>

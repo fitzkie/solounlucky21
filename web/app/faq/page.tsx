@@ -19,7 +19,7 @@ const FAQS = [
   },
   {
     q: 'Can I use a rental service like NiceHash or Braiins?',
-    a: 'Yes. Set the custom pool destination to stratum+tcp://bitcoin.unlucky21.com:3333 with your Bitcoin address as the username. See the Connect page for step-by-step instructions.',
+    a: 'Yes. Use port 4444 — stratum+tcp://bitcoin.unlucky21.com:4444 — with your Bitcoin address as the username. See the Connect page for step-by-step instructions for NiceHash, Mining Rig Rentals, and Braiins.',
   },
   {
     q: 'What is the minimum hashrate to compete?',
