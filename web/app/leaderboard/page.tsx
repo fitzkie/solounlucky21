@@ -1,5 +1,5 @@
 import { getLeaderboard } from '@/lib/db'
-import { formatBTC, truncate, timeAgo } from '@/lib/format'
+import { formatBTC, formatHashrate, truncate, timeAgo } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +30,7 @@ export default async function LeaderboardPage() {
             <tr className="border-b border-white/10 bg-white/5 text-white/40 text-xs font-medium">
               <th className="text-left px-4 py-3 w-12">Rank</th>
               <th className="text-left px-4 py-3">Address</th>
-              <th className="text-right px-4 py-3 hidden md:table-cell">Best Share</th>
+              <th className="text-right px-4 py-3 hidden md:table-cell">Best Share Diff</th>
               <th className="text-right px-4 py-3 hidden md:table-cell">Est. Hashrate</th>
               <th className="text-right px-4 py-3 hidden sm:table-cell">Last Active</th>
               <th className="text-right px-4 py-3">Est. Payout</th>
@@ -66,9 +66,7 @@ export default async function LeaderboardPage() {
                     {BigInt(entry.bestShare).toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-white/40 text-xs hidden md:table-cell">
-                    {entry.hashrate7dThs < 0.001
-                      ? '< 0.001 TH/s'
-                      : `${entry.hashrate7dThs.toFixed(3)} TH/s`}
+                    {formatHashrate(entry.hashrate7dThs * 1e12)}
                   </td>
                   <td className="px-4 py-3 text-right text-white/30 text-xs hidden sm:table-cell">
                     {timeAgo(entry.lastSeen)}
@@ -129,9 +127,7 @@ export default async function LeaderboardPage() {
                     {BigInt(entry.bestShare).toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-white/40 text-xs hidden md:table-cell">
-                    {entry.hashrate7dThs < 0.001
-                      ? '< 0.001 TH/s'
-                      : `${entry.hashrate7dThs.toFixed(3)} TH/s`}
+                    {formatHashrate(entry.hashrate7dThs * 1e12)}
                   </td>
                   <td className="px-4 py-3 text-right text-white/30 text-xs hidden sm:table-cell">
                     {timeAgo(entry.lastSeen)}

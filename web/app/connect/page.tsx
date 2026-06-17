@@ -172,16 +172,19 @@ export default function ConnectPage() {
         <p className="text-white/60">Rent SHA-256 hashrate from Mining Rig Rentals and point it at Unlucky21.</p>
         <ol className="text-white/60 space-y-1.5 list-decimal list-inside">
           <li>Log in at <a href="https://www.miningrigrentals.com" className="text-yellow-400 hover:underline" target="_blank" rel="noopener noreferrer">miningrigrentals.com</a></li>
-          <li>Go to <strong className="text-white">My Pools</strong> and add a new pool</li>
+          <li>When renting a rig, go to <strong className="text-white">Pool Information → Add a pool</strong></li>
           <li>Enter the pool details:</li>
         </ol>
         <FieldGrid fields={[
-          { label: 'Host',     value: 'bitcoin.unlucky21.com' },
-          { label: 'Port',     value: '4444' },
-          { label: 'Username', value: 'your_btc_address' },
-          { label: 'Password', value: 'x' },
+          { label: 'Pool Host:Port', value: 'stratum+tcp://bitcoin.unlucky21.com:4444' },
+          { label: 'Workername',     value: 'your_btc_address.worker1' },
+          { label: 'Password',       value: 'x' },
         ]} />
-        <p className="text-white/50">4. Save and select as the pool when placing a rental order.</p>
+        <p className="text-white/50">4. Click <strong className="text-white">Add pool</strong> — MRR will test the connection first. If it says "unable to establish connection," wait 30 seconds and retry.</p>
+        <p className="text-xs text-white/30 border-t border-white/10 pt-3">
+          MRR rigs arrive at TH/s scale. Use port <code className="text-yellow-400/70">4444</code> — it has a higher difficulty floor tuned for high hashrate.
+          Your address appears on the leaderboard automatically once shares arrive.
+        </p>
       </HardwareSection>
 
       <HardwareSection title="Braiins Pool (Hash Rental)">
