@@ -103,16 +103,15 @@ export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
   }>(
     `SELECT
        btc_address,
-       MAX(share_difficulty)::TEXT                                   AS best_share,
+       MAX(true_difficulty)::TEXT                                    AS best_share,
        MAX(submitted_at)                                             AS last_seen,
-       RANK() OVER (ORDER BY MAX(share_difficulty) DESC)::INT        AS rank,
+       RANK() OVER (ORDER BY MAX(true_difficulty) DESC)::INT         AS rank,
        (SUM(share_difficulty) * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs
      FROM shares
      WHERE round_id = $1
        AND submitted_at > NOW() - INTERVAL '7 days'
-       AND is_stale = false
      GROUP BY btc_address
-     ORDER BY MAX(share_difficulty) DESC
+     ORDER BY MAX(true_difficulty) DESC
      LIMIT $2`,
     [roundId, limit]
   )
@@ -280,17 +279,17 @@ export async function getMinerStats(address: string) {
 
   const [rankResult, historyResult, blockResult] = await Promise.all([
     // Current rank
-    db.query<{ rank: number | null; best_share: string | null; last_seen: Date | null }>(
-      `SELECT rank, best_share, last_seen FROM (
+    db.query<{ rank: number | null; best_share: string | null; last_seen: Date | null; hashrate_7d_hs: string | null }>(
+      `SELECT rank, best_share, last_seen, hashrate_7d_hs FROM (
          SELECT
            btc_address,
-           MAX(share_difficulty)::TEXT AS best_share,
+           MAX(true_difficulty)::TEXT AS best_share,
            MAX(submitted_at)           AS last_seen,
-           RANK() OVER (ORDER BY MAX(share_difficulty) DESC)::INT AS rank
+           RANK() OVER (ORDER BY MAX(true_difficulty) DESC)::INT AS rank,
+           (SUM(share_difficulty) * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs
          FROM shares
          WHERE round_id = $1
            AND submitted_at > NOW() - INTERVAL '7 days'
-           AND is_stale = false
          GROUP BY btc_address
        ) t WHERE btc_address = $2`,
       [roundId, address]
@@ -300,11 +299,10 @@ export async function getMinerStats(address: string) {
       `SELECT
          DATE_TRUNC('hour', submitted_at) AS hour,
          COUNT(*)::TEXT AS count,
-         MAX(share_difficulty)::TEXT AS best
+         MAX(true_difficulty)::TEXT AS best
        FROM shares
        WHERE btc_address = $1
          AND submitted_at > NOW() - INTERVAL '7 days'
-         AND is_stale = false
        GROUP BY hour ORDER BY hour`,
       [address]
     ),
@@ -328,6 +326,7 @@ export async function getMinerStats(address: string) {
     bestShare: rankResult.rows[0]?.best_share ?? null,
     lastSeen: rankResult.rows[0]?.last_seen ?? null,
     estimatedPayoutSats: rankResult.rows[0] ? perSlot : null,
+    hashrate7dThs: rankResult.rows[0]?.hashrate_7d_hs ? parseFloat(rankResult.rows[0].hashrate_7d_hs) / 1e12 : null,
     shareHistory: historyResult.rows,
     blocksInTop21: blockResult.rows,
   }

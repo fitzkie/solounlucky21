@@ -37,6 +37,17 @@ export function formatDuration(seconds: number): string {
 
 // P(find block within t seconds) = 1 - e^(-t / expectedSeconds)
 // Atlas Pool infographic formula
+export function formatBestShare(diff: number | string): string {
+  const n = typeof diff === 'string' ? parseFloat(diff) : diff
+  if (!n || n <= 0) return '—'
+  if (n >= 1e15) return `${(n / 1e15).toFixed(2)} P`
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2)} T`
+  if (n >= 1e9)  return `${(n / 1e9).toFixed(2)} G`
+  if (n >= 1e6)  return `${(n / 1e6).toFixed(2)} M`
+  if (n >= 1e3)  return `${(n / 1e3).toFixed(2)} K`
+  return n.toFixed(0)
+}
+
 export function blockProbability(expectedSeconds: number, windowSeconds: number): string {
   if (expectedSeconds <= 0) return '0%'
   const p = 1 - Math.exp(-windowSeconds / expectedSeconds)

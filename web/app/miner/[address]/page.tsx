@@ -1,5 +1,5 @@
 import { getMinerStats } from '@/lib/db'
-import { formatBTC, timeAgo } from '@/lib/format'
+import { formatBTC, formatHashrate, formatBestShare, timeAgo } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,8 +30,8 @@ export default async function MinerDetailPage({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { label: 'Current Rank',            value: `#${stats.currentRank}` },
-            { label: 'Best Share (7d)',          value: stats.bestShare ? BigInt(stats.bestShare).toLocaleString() : '—' },
-            { label: 'Last Active',             value: stats.lastSeen ? timeAgo(stats.lastSeen) : '—' },
+            { label: 'Best Share',              value: formatBestShare(stats.bestShare ?? '0') },
+            { label: 'Est. Hashrate (7d)',      value: stats.hashrate7dThs != null ? formatHashrate(stats.hashrate7dThs * 1e12) : '—' },
             { label: 'Est. Payout if Found Now', value: stats.estimatedPayoutSats ? formatBTC(stats.estimatedPayoutSats) : '—' },
           ].map(s => (
             <div key={s.label} className="bg-white/5 rounded-xl p-4 border border-white/10">
@@ -53,7 +53,7 @@ export default async function MinerDetailPage({
                 <tr className="bg-white/5 border-b border-white/10 text-white/40">
                   <th className="text-left px-4 py-2">Hour (UTC)</th>
                   <th className="text-right px-4 py-2">Shares</th>
-                  <th className="text-right px-4 py-2">Best Difficulty</th>
+                  <th className="text-right px-4 py-2">Best Share</th>
                 </tr>
               </thead>
               <tbody>
@@ -64,7 +64,7 @@ export default async function MinerDetailPage({
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">{row.count}</td>
                     <td className="px-4 py-2 text-right tabular-nums text-yellow-400/70">
-                      {BigInt(row.best ?? '0').toLocaleString()}
+                      {formatBestShare(row.best ?? '0')}
                     </td>
                   </tr>
                 ))}

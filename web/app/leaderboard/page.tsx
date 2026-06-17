@@ -1,5 +1,5 @@
 import { getLeaderboard } from '@/lib/db'
-import { formatBTC, formatHashrate, truncate, timeAgo } from '@/lib/format'
+import { formatBTC, formatHashrate, formatBestShare, truncate, timeAgo } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +30,7 @@ export default async function LeaderboardPage() {
             <tr className="border-b border-white/10 bg-white/5 text-white/40 text-xs font-medium">
               <th className="text-left px-4 py-3 w-12">Rank</th>
               <th className="text-left px-4 py-3">Address</th>
-              <th className="text-right px-4 py-3 hidden md:table-cell">Best Share Diff</th>
+              <th className="text-right px-4 py-3 hidden md:table-cell">Best Share</th>
               <th className="text-right px-4 py-3 hidden md:table-cell">Est. Hashrate</th>
               <th className="text-right px-4 py-3 hidden sm:table-cell">Last Active</th>
               <th className="text-right px-4 py-3">Est. Payout</th>
@@ -63,7 +63,7 @@ export default async function LeaderboardPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-white/40 text-xs hidden md:table-cell">
-                    {BigInt(entry.bestShare).toLocaleString()}
+                    {formatBestShare(entry.bestShare)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-white/40 text-xs hidden md:table-cell">
                     {formatHashrate(entry.hashrate7dThs * 1e12)}
@@ -124,7 +124,7 @@ export default async function LeaderboardPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-white/40 text-xs hidden md:table-cell">
-                    {BigInt(entry.bestShare).toLocaleString()}
+                    {formatBestShare(entry.bestShare)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-white/40 text-xs hidden md:table-cell">
                     {formatHashrate(entry.hashrate7dThs * 1e12)}
