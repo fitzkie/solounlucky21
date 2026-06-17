@@ -66,7 +66,7 @@ export default function ConnectPage() {
             </div>
             <p className="text-white/40 text-xs leading-relaxed">
               For hash rental services — NiceHash, Mining Rig Rentals, Braiins.
-              Auto-adjusting difficulty (vardiff) starting at 256K, suited for TH/s-scale hashrate.
+              Auto-adjusting difficulty (vardiff) starting at 64K, suited for TH/s-scale hashrate.
             </p>
             <code className="block text-white/40 text-xs font-mono mt-1">bitcoin.unlucky21.com:4444</code>
           </div>
@@ -133,7 +133,7 @@ export default function ConnectPage() {
         <h2 className="text-lg font-black">Hash Rentals — Port 4444</h2>
         <p className="text-white/50 text-sm">
           Use port <strong className="text-white">4444</strong> when directing rented hashrate from NiceHash, Mining Rig Rentals, or Braiins.
-          This port uses vardiff starting at 256K difficulty, automatically scaling up for the TH/s-scale hashrate that rental services deliver.
+          This port uses vardiff starting at 64K difficulty, automatically scaling up for the TH/s-scale hashrate that rental services deliver.
         </p>
         <div className="grid md:grid-cols-3 gap-4">
           {[
@@ -182,7 +182,7 @@ export default function ConnectPage() {
         ]} />
         <p className="text-white/50">4. Click <strong className="text-white">Add pool</strong> — MRR will test the connection first. If it says "unable to establish connection," wait 30 seconds and retry.</p>
         <p className="text-xs text-white/30 border-t border-white/10 pt-3">
-          MRR rigs arrive at TH/s scale. Use port <code className="text-yellow-400/70">4444</code> — vardiff starts at 256K and scales up automatically for high hashrate.
+          MRR rigs arrive at TH/s scale. Use port <code className="text-yellow-400/70">4444</code> — vardiff starts at 64K and scales up automatically for high hashrate.
           Your address appears on the leaderboard automatically once shares arrive.
         </p>
 
