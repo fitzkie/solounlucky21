@@ -37,7 +37,7 @@ export default function DisclaimerPage() {
       <div className="space-y-6">
         <Risk emoji="🛠️" title="Software Bugs and Misconfigurations">
           <p>It is entirely possible that bugs in the pool software could prevent block finding altogether, fail to deliver a found block to the node, or fail to propagate a block correctly.</p>
-          <p>We have already tested the pool software and found 2 test blocks on signet. Development is ongoing.</p>
+          <p>We have already tested the pool software and found over 900 test blocks on signet, confirming end-to-end block submission and payout logic. The pool is now live on mainnet.</p>
         </Risk>
 
         <Risk emoji="⛓️" title="Orphaned Blocks">
