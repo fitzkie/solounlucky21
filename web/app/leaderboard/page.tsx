@@ -36,7 +36,14 @@ export default async function LeaderboardPage() {
           </thead>
           <tbody>
             {top21.map((entry) => {
-              const isHomeMiner = entry.hashrate7dThs < 100
+              const badge = entry.isRental ? 'RENTAL'
+                : entry.hashrate7dThs >= 100 ? 'PRO'
+                : 'HOME'
+              const badgeStyle = badge === 'RENTAL'
+                ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                : badge === 'PRO'
+                ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30'
               return (
                 <tr
                   key={entry.btcAddress}
@@ -53,11 +60,9 @@ export default async function LeaderboardPage() {
                       >
                         {truncate(entry.btcAddress)}
                       </a>
-                      {isHomeMiner && (
-                        <span className="text-xs bg-yellow-500/10 text-yellow-500 border border-yellow-500/30 rounded px-1.5 py-0.5 font-bold hidden sm:inline">
-                          HOME
-                        </span>
-                      )}
+                      <span className={`text-xs border rounded px-1.5 py-0.5 font-bold hidden sm:inline ${badgeStyle}`}>
+                        {badge}
+                      </span>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-white/40 text-xs hidden sm:table-cell">
@@ -91,7 +96,14 @@ export default async function LeaderboardPage() {
             </tr>
 
             {below.map((entry) => {
-              const isHomeMiner = entry.hashrate7dThs < 100
+              const badge = entry.isRental ? 'RENTAL'
+                : entry.hashrate7dThs >= 100 ? 'PRO'
+                : 'HOME'
+              const badgeStyle = badge === 'RENTAL'
+                ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                : badge === 'PRO'
+                ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30'
               return (
                 <tr
                   key={entry.btcAddress}
@@ -108,11 +120,9 @@ export default async function LeaderboardPage() {
                       >
                         {truncate(entry.btcAddress)}
                       </a>
-                      {isHomeMiner && (
-                        <span className="text-xs bg-yellow-500/10 text-yellow-500 border border-yellow-500/30 rounded px-1.5 py-0.5 font-bold hidden sm:inline">
-                          HOME
-                        </span>
-                      )}
+                      <span className={`text-xs border rounded px-1.5 py-0.5 font-bold hidden sm:inline ${badgeStyle}`}>
+                        {badge}
+                      </span>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-white/40 text-xs hidden sm:table-cell">

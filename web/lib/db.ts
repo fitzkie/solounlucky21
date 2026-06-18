@@ -39,6 +39,7 @@ export interface LeaderboardEntry {
   lastSeen: Date
   estimatedPayoutSats: number
   hashrate7dThs: number    // estimated 7-day hashrate in TH/s
+  isRental: boolean
 }
 
 export interface PoolStats {
@@ -100,13 +101,15 @@ export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
     last_seen: Date
     rank: number
     hashrate_7d_hs: string
+    is_rental: boolean
   }>(
     `SELECT
        btc_address,
        MAX(true_difficulty)::TEXT                                    AS best_share,
        MAX(submitted_at)                                             AS last_seen,
        RANK() OVER (ORDER BY MAX(true_difficulty) DESC)::INT         AS rank,
-       (SUM(share_difficulty) * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs
+       (SUM(share_difficulty) * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs,
+       BOOL_OR(source_port = 4444)                                   AS is_rental
      FROM shares
      WHERE round_id = $1
        AND submitted_at > NOW() - INTERVAL '7 days'
@@ -125,6 +128,7 @@ export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
     lastSeen: row.last_seen,
     estimatedPayoutSats: perSlot,
     hashrate7dThs: parseFloat(row.hashrate_7d_hs) / 1e12,
+    isRental: row.is_rental ?? false,
   }))
 }
 
