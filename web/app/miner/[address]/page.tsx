@@ -1,6 +1,18 @@
 import { getMinerStats } from '@/lib/db'
 import { formatBTC, formatHashrate, formatBestShare, timeAgo } from '@/lib/format'
 
+function timeUntilExpiry(lastSeen: Date | null): { label: string; urgent: boolean } {
+  if (!lastSeen) return { label: '—', urgent: false }
+  const msRemaining = new Date(lastSeen).getTime() + 7 * 24 * 60 * 60 * 1000 - Date.now()
+  if (msRemaining <= 0) return { label: 'Expired', urgent: true }
+  const days = Math.floor(msRemaining / (24 * 60 * 60 * 1000))
+  const hours = Math.floor((msRemaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
+  const mins = Math.floor((msRemaining % (60 * 60 * 1000)) / (60 * 1000))
+  const urgent = msRemaining < 24 * 60 * 60 * 1000
+  if (days > 0) return { label: `${days}d ${hours}h`, urgent: days < 2 }
+  return { label: `${hours}h ${mins}m`, urgent: true }
+}
+
 export const dynamic = 'force-dynamic'
 
 export default async function MinerDetailPage({
@@ -27,15 +39,20 @@ export default async function MinerDetailPage({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: 'Current Rank',            value: `#${stats.currentRank}` },
-            { label: 'Best Share',              value: formatBestShare(stats.bestShare ?? '0') },
-            { label: 'Est. Hashrate (7d)',      value: stats.hashrate7dThs != null ? formatHashrate(stats.hashrate7dThs * 1e12) : '—' },
-            { label: 'Est. Payout if Found Now', value: stats.estimatedPayoutSats ? formatBTC(stats.estimatedPayoutSats) : '—' },
-          ].map(s => (
-            <div key={s.label} className="bg-white/5 rounded-xl p-4 border border-white/10">
-              <div className="text-2xl font-black text-yellow-400">{s.value}</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {(() => {
+            const expiry = timeUntilExpiry(stats.lastSeen)
+            return [
+              { label: 'Current Rank',             value: `#${stats.currentRank}`,                                               color: 'text-yellow-400', urgent: false },
+              { label: 'Best Share',               value: formatBestShare(stats.bestShare ?? '0'),                               color: 'text-yellow-400', urgent: false },
+              { label: 'Est. Payout if Found Now', value: stats.estimatedPayoutSats ? formatBTC(stats.estimatedPayoutSats) : '—', color: 'text-yellow-400', urgent: false },
+              { label: 'Est. Hashrate (7d)',       value: stats.hashrate7dThs != null ? formatHashrate(stats.hashrate7dThs * 1e12) : '—', color: 'text-yellow-400', urgent: false },
+              { label: 'Last Active',              value: stats.lastSeen ? timeAgo(stats.lastSeen) : '—',                       color: 'text-yellow-400', urgent: false },
+              { label: 'Rank Expires In',          value: expiry.label,                                                         color: expiry.urgent ? 'text-red-400' : 'text-yellow-400', urgent: expiry.urgent },
+            ]
+          })().map(s => (
+            <div key={s.label} className={`bg-white/5 rounded-xl p-4 border ${s.urgent ? 'border-red-500/30' : 'border-white/10'}`}>
+              <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
               <div className="text-xs text-white/40 mt-1">{s.label}</div>
             </div>
           ))}
