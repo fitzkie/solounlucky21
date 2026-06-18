@@ -300,24 +300,60 @@ if "cb->coinb1_len+12+cb->coinb2_len" in sc:
     print("[datum_stratum.c] Replaced remaining coinb2_len references with coinb2_len_use")
 
 
-# ─── 5. datum_stratum.c: call datum_reward_share_submit on every accepted share ─
-# datum_reward_share_submit() is defined in datum_reward_socket.c but was never
-# wired into the share-acceptance path.  Insert it after the "accepted" JSON
-# is sent to the miner so every validated share (datum or solo) is recorded in
-# the Unlucky21 PostgreSQL database via the reward-service Unix socket.
-#
-# The target is uniquely identified by the send_string call followed by
-# "// update connection totals" — the auth-accept path that looks similar
-# is followed by "m->authorized = true" instead.
+# ─── 5. datum_stratum.c: call datum_reward_share_submit with true hash difficulty ─
+# datum_reward_share_submit() is defined in datum_reward_socket.c.
+# v2 (true_diff): compute the real share difficulty from the SHA256d hash bytes
+# instead of passing job_diff (which made true_difficulty == share_difficulty always).
+# Formula: diff1_target (0xFFFF*2^208) / hash_value, using the two most significant
+# 32-bit words after the 4 guaranteed-zero bytes (H-not-zero check).
+
+_TRUE_DIFF_BLOCK = (
+    "\t/* -- UNLUCKY21: compute true share difficulty from SHA256d hash for best-share ranking -- */\n"
+    "\tdouble true_diff_computed;\n"
+    "\t{\n"
+    "\t\tuint32_t h_hi = ((uint32_t)share_hash[27] << 24) | ((uint32_t)share_hash[26] << 16) |\n"
+    "\t\t                ((uint32_t)share_hash[25] <<  8) | ((uint32_t)share_hash[24]);\n"
+    "\t\tuint32_t h_lo = ((uint32_t)share_hash[23] << 24) | ((uint32_t)share_hash[22] << 16) |\n"
+    "\t\t                ((uint32_t)share_hash[21] <<  8) | ((uint32_t)share_hash[20]);\n"
+    "\t\tif (h_hi == 0) {\n"
+    "\t\t\ttrue_diff_computed = (h_lo > 0) ? ((double)0xFFFF * 281474976710656.0 / (double)h_lo) : 1e20;\n"
+    "\t\t} else {\n"
+    "\t\t\ttrue_diff_computed = (double)0xFFFF0000UL / ((double)h_hi + (double)h_lo / 4294967296.0);\n"
+    "\t\t}\n"
+    "\t}\n"
+    "\t/* -- UNLUCKY21: record share in reward service -- */\n"
+    "\tdatum_reward_share_submit(username_s, job_diff, true_diff_computed);"
+)
 
 with open(STRATUM_C) as f:
     sc5 = f.read()
 
-if "datum_reward_share_submit(username_s" in sc5:
-    print("[datum_stratum.c share submit] Already patched — skipping")
-else:
-    # Match uniquely: accepted-share send followed by connection-totals comment.
-    # The blank line between them contains a tab (\t\n) in the upstream source.
+if "true_diff_computed" in sc5:
+    print("[datum_stratum.c share submit] Already at v2 (true hash diff) — skipping")
+elif "datum_reward_share_submit(username_s, job_diff, (double)job_diff)" in sc5:
+    # Intermediate form — replace just the call
+    sc5 = sc5.replace(
+        "/* -- UNLUCKY21: record share in reward service -- */\n"
+        "\tdatum_reward_share_submit(username_s, job_diff, (double)job_diff);",
+        _TRUE_DIFF_BLOCK,
+        1,
+    )
+    with open(STRATUM_C, "w") as f:
+        f.write(sc5)
+    print("[datum_stratum.c share submit] Upgraded (double)job_diff → true_diff_computed")
+elif "datum_reward_share_submit(username_s, job_diff, 0)" in sc5:
+    # Old v1 form with zero — replace just the call
+    sc5 = sc5.replace(
+        "/* Unlucky21: record every accepted share in reward-service DB */\n"
+        "\tdatum_reward_share_submit(username_s, job_diff, 0);",
+        _TRUE_DIFF_BLOCK,
+        1,
+    )
+    with open(STRATUM_C, "w") as f:
+        f.write(sc5)
+    print("[datum_stratum.c share submit] Upgraded 0 → true_diff_computed")
+elif "datum_reward_share_submit(username_s" not in sc5:
+    # Fresh install — insert from scratch around the accepted-share send
     _t5 = (
         "datum_socket_send_string_to_client(c, s);\n"
         "\t\n"
@@ -325,20 +361,16 @@ else:
         "\tm->share_diff_accepted += job_diff;\n"
         "\tm->share_count_accepted++;"
     )
-    # Fallback: blank line may be bare \n on some versions
     _t5_alt = _t5.replace("\t\n", "\n")
-
     _r5 = (
         "datum_socket_send_string_to_client(c, s);\n"
         "\n"
-        "\t/* Unlucky21: record every accepted share in reward-service DB */\n"
-        "\tdatum_reward_share_submit(username_s, job_diff, 0);\n"
+        "\t" + _TRUE_DIFF_BLOCK + "\n"
         "\t\n"
         "\t// update connection totals\n"
         "\tm->share_diff_accepted += job_diff;\n"
         "\tm->share_count_accepted++;"
     )
-
     if _t5 in sc5:
         sc5 = sc5.replace(_t5, _r5, 1)
     elif _t5_alt in sc5:
@@ -346,14 +378,116 @@ else:
     else:
         print(f"ERROR: share-submit target not found in {STRATUM_C}")
         sys.exit(1)
-
     with open(STRATUM_C, "w") as f:
         f.write(sc5)
-    print("[datum_stratum.c share submit] Patched — datum_reward_share_submit wired in")
+    print("[datum_stratum.c share submit] Patched — datum_reward_share_submit with true hash diff")
+else:
+    print("[datum_stratum.c share submit] Already patched (unknown variant) — skipping")
+
+
+# ─── 6. datum_stratum.c: handle mining.extranonce.subscribe ──────────────────
+# MRR proxy (Antminer T21) sends mining.extranonce.subscribe after authorize.
+# Upstream returns "Method not found" causing some clients to stall.
+# We intercept it and return result:true so the session continues cleanly.
+
+_EXT_TARGET = (
+    "\t\t\tif (!strcmp(method, \"mining.authorize\")) {\n"
+    "\t\t\t\ti = client_mining_authorize(c, id, params_obj);\n"
+    "\t\t\t\tjson_decref(j);\n"
+    "\t\t\t\treturn i;\n"
+    "\t\t\t}\n"
+    "\t\t\t[[fallthrough]];"
+)
+
+_EXT_REPLACEMENT = (
+    "\t\t\tif (!strcmp(method, \"mining.authorize\")) {\n"
+    "\t\t\t\ti = client_mining_authorize(c, id, params_obj);\n"
+    "\t\t\t\tjson_decref(j);\n"
+    "\t\t\t\treturn i;\n"
+    "\t\t\t}\n"
+    "\t\t\t/* -- UNLUCKY21: ACK extranonce.subscribe so MRR/T21 proxy sessions don't stall -- */\n"
+    "\t\t\tif (!strcmp(method, \"mining.extranonce.subscribe\")) {\n"
+    "\t\t\t\tchar r[64];\n"
+    "\t\t\t\tsnprintf(r, sizeof(r), \"{\\\"error\\\":null,\\\"id\\\":%\\\"PRIu64\\\",\\\"result\\\":true}\\n\", id);\n"
+    "\t\t\t\tdatum_socket_send_string_to_client(c, r);\n"
+    "\t\t\t\tjson_decref(j);\n"
+    "\t\t\t\treturn 0;\n"
+    "\t\t\t}\n"
+    "\t\t\t[[fallthrough]];"
+)
+
+with open(STRATUM_C) as f:
+    sc6 = f.read()
+
+if "mining.extranonce.subscribe" in sc6:
+    print("[datum_stratum.c extranonce.subscribe] Already patched — skipping")
+elif _EXT_TARGET in sc6:
+    sc6 = sc6.replace(_EXT_TARGET, _EXT_REPLACEMENT, 1)
+    with open(STRATUM_C, "w") as f:
+        f.write(sc6)
+    print("[datum_stratum.c extranonce.subscribe] Patched — returns result:true")
+else:
+    print(f"ERROR: extranonce.subscribe target not found in {STRATUM_C}")
+    sys.exit(1)
+
+
+# ─── 7. datum_stratum.c: version rolling fallback for non-negotiated clients ──
+# MRR proxy and some hardware wallets send a 6th param (version bits) in
+# mining.submit WITHOUT first negotiating mining.configure / BIP310.
+# Upstream DATUM ignores param[5] in that case, so the block header we
+# reconstruct differs from what the miner hashed → H-not-zero rejection (error 23).
+# Fix: if m->extension_version_rolling is false, still accept param[5] bits
+# provided they are within the standard BIP310 mask (0x1fffe000).
+
+_VROLL_TARGET = (
+    "\t\tbver |= vroll_uint;\n"
+    "\t}\n"
+    "\t\n"
+    "\t// 0 - 4 = version"
+)
+_VROLL_TARGET_ALT = _VROLL_TARGET.replace("\t\n", "\n")
+
+_VROLL_REPLACEMENT = (
+    "\t\tbver |= vroll_uint;\n"
+    "\t} else {\n"
+    "\t\t/* -- UNLUCKY21: accept version bits from MRR/T21 proxy without mining.configure -- */\n"
+    "\t\tvroll = json_array_get(params_obj, 5);\n"
+    "\t\tif (vroll) {\n"
+    "\t\t\tvroll_s = json_string_value(vroll);\n"
+    "\t\t\tif (vroll_s) {\n"
+    "\t\t\t\tvroll_uint = strtoul(vroll_s, NULL, 16);\n"
+    "\t\t\t\tif ((vroll_uint & 0x1fffe000) == vroll_uint) {\n"
+    "\t\t\t\t\tbver |= vroll_uint;\n"
+    "\t\t\t\t}\n"
+    "\t\t\t}\n"
+    "\t\t}\n"
+    "\t}\n"
+    "\t\n"
+    "\t// 0 - 4 = version"
+)
+
+with open(STRATUM_C) as f:
+    sc7 = f.read()
+
+if "0x1fffe000" in sc7:
+    print("[datum_stratum.c version rolling fallback] Already patched — skipping")
+elif _VROLL_TARGET in sc7:
+    sc7 = sc7.replace(_VROLL_TARGET, _VROLL_REPLACEMENT, 1)
+    with open(STRATUM_C, "w") as f:
+        f.write(sc7)
+    print("[datum_stratum.c version rolling fallback] Patched — accepts BIP310 bits without negotiate")
+elif _VROLL_TARGET_ALT in sc7:
+    sc7 = sc7.replace(_VROLL_TARGET_ALT, _VROLL_REPLACEMENT.replace("\t\n", "\n"), 1)
+    with open(STRATUM_C, "w") as f:
+        f.write(sc7)
+    print("[datum_stratum.c version rolling fallback] Patched — accepts BIP310 bits without negotiate")
+else:
+    print(f"ERROR: version rolling target not found in {STRATUM_C}")
+    sys.exit(1)
 
 
 print()
 print("All patches applied.  Rebuild datum_gateway:")
-print(f"  cd {BUILD_DIR} && make -j$(nproc)")
+print(f"  cd {BUILD_DIR} && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4")
 print("Then restart services:")
-print("  systemctl restart reward-unlucky21 datum-gateway-unlucky21")
+print("  systemctl restart reward-unlucky21 datum-gateway-unlucky21 datum-gateway-rental")

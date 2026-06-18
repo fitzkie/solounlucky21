@@ -18,7 +18,8 @@ type Share struct {
 	BTCAddress string
 	WorkerName string
 	Difficulty *big.Int // must not be nil
-	IsStale    bool
+	TrueDiff   float64
+	SourcePort int
 }
 
 // Entry is one ranked row in the leaderboard.
@@ -63,13 +64,14 @@ func (s *Service) RecordShare(ctx context.Context, sh Share) error {
 	// Insert the share. share_difficulty is NUMERIC(78,0); pass as string to
 	// avoid any driver type-mapping ambiguity with *big.Int.
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO shares (round_id, btc_address, worker_name, share_difficulty, is_stale)
-		 VALUES ($1, $2, $3, $4::NUMERIC, $5)`,
+		`INSERT INTO shares (round_id, btc_address, worker_name, share_difficulty, true_difficulty, source_port)
+		 VALUES ($1, $2, $3, $4::NUMERIC, $5, $6)`,
 		sh.RoundID,
 		sh.BTCAddress,
 		sh.WorkerName,
 		sh.Difficulty.String(),
-		sh.IsStale,
+		sh.TrueDiff,
+		sh.SourcePort,
 	)
 	if err != nil {
 		return fmt.Errorf("insert share: %w", err)
@@ -98,15 +100,14 @@ func (s *Service) GetTop21(ctx context.Context, roundID int64) ([]Entry, error) 
 	const query = `
 SELECT
   btc_address,
-  MAX(share_difficulty)::TEXT AS best_share,
+  FLOOR(MAX(true_difficulty))::BIGINT::TEXT AS best_share,
   MAX(submitted_at)           AS last_activity,
-  RANK() OVER (ORDER BY MAX(share_difficulty) DESC)::INT AS rank
+  RANK() OVER (ORDER BY MAX(true_difficulty) DESC)::INT AS rank
 FROM shares
 WHERE round_id = $1
   AND submitted_at > NOW() - INTERVAL '7 days'
-  AND is_stale = false
 GROUP BY btc_address
-ORDER BY MAX(share_difficulty) DESC
+ORDER BY MAX(true_difficulty) DESC
 LIMIT 21`
 
 	rows, err := s.pool.Query(ctx, query, roundID)

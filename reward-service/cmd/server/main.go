@@ -54,7 +54,7 @@ func (h *poolHandler) GetCoinbaseOutputs(minerAddress string, feesSats int64) ([
 }
 
 // RecordShare records a single share submission.
-func (h *poolHandler) RecordShare(btcAddress, workerName, difficulty string, isStale bool) error {
+func (h *poolHandler) RecordShare(btcAddress, workerName, difficulty string, trueDiff float64, sourcePort int) error {
 	h.mu.RLock()
 	roundID := h.roundID
 	h.mu.RUnlock()
@@ -70,7 +70,8 @@ func (h *poolHandler) RecordShare(btcAddress, workerName, difficulty string, isS
 		BTCAddress: btcAddress,
 		WorkerName: workerName,
 		Difficulty: diff,
-		IsStale:    isStale,
+		TrueDiff:   trueDiff,
+		SourcePort: sourcePort,
 	})
 }
 

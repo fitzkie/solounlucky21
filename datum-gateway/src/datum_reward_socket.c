@@ -19,6 +19,7 @@
 #include <stdint.h>
 
 #include "datum_reward_socket.h"
+#include "datum_conf.h"
 
 #define RESPONSE_BUF_SIZE 16384
 
@@ -309,10 +310,10 @@ int datum_request_coinbase_outputs(
 
 
 /* ── UNLUCKY21: fire-and-forget share submit ─────────────────────────────── */
-void datum_reward_share_submit(const char *username, uint64_t difficulty, int is_stale) {
+void datum_reward_share_submit(const char *username, uint64_t difficulty, double true_diff) {
     int fd;
     struct sockaddr_un addr;
-    char req[384];
+    char req[512];
     char btc_addr[REWARD_ADDR_LEN] = {0};
     char worker[64]                = {0};
 
@@ -342,9 +343,9 @@ void datum_reward_share_submit(const char *username, uint64_t difficulty, int is
 
     snprintf(req, sizeof(req),
         "{\"type\":\"share\",\"btc_address\":\"%s\",\"worker_name\":\"%s\","
-        "\"difficulty\":\"%llu\",\"is_stale\":%s}\n",
-        btc_addr, worker, (unsigned long long)difficulty,
-        is_stale ? "true" : "false");
+        "\"difficulty\":\"%llu\",\"true_difficulty\":%.2f,\"source_port\":%d}\n",
+        btc_addr, worker, (unsigned long long)difficulty, true_diff,
+        datum_config.stratum_v1_listen_port);
 
     (void)write(fd, req, strlen(req));
     close(fd);

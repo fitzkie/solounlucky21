@@ -25,7 +25,7 @@ type Handler interface {
 	GetCoinbaseOutputs(minerAddress string, feesSats int64) ([]Output, error)
 
 	// RecordShare records a share submission. Called asynchronously.
-	RecordShare(btcAddress, workerName, difficulty string, isStale bool) error
+	RecordShare(btcAddress, workerName, difficulty string, trueDiff float64, sourcePort int) error
 
 	// BlockFound handles a block-found event atomically.
 	BlockFound(height int32, hash, finderAddress, coinbaseTxID string, feesSats int64) error
@@ -79,10 +79,11 @@ type inboundMsg struct {
 	FeesSats     int64  `json:"fees_sats"`
 
 	// share fields
-	BTCAddress string `json:"btc_address"`
-	WorkerName string `json:"worker_name"`
-	Difficulty string `json:"difficulty"`
-	IsStale    bool   `json:"is_stale"`
+	BTCAddress    string  `json:"btc_address"`
+	WorkerName    string  `json:"worker_name"`
+	Difficulty    string  `json:"difficulty"`
+	TrueDifficulty float64 `json:"true_difficulty"`
+	SourcePort    int     `json:"source_port"`
 
 	// block_found fields
 	Height        int32  `json:"height"`
@@ -172,7 +173,7 @@ func (s *Server) handleCoinbase(conn net.Conn, msg *inboundMsg) {
 func (s *Server) handleShare(msg *inboundMsg) {
 	// Fire-and-forget: run in goroutine, no response written.
 	go func() {
-		if err := s.handler.RecordShare(msg.BTCAddress, msg.WorkerName, msg.Difficulty, msg.IsStale); err != nil {
+		if err := s.handler.RecordShare(msg.BTCAddress, msg.WorkerName, msg.Difficulty, msg.TrueDifficulty, msg.SourcePort); err != nil {
 			slog.Error("socket: RecordShare failed", "address", msg.BTCAddress, "err", err)
 		}
 	}()
