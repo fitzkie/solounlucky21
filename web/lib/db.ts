@@ -89,12 +89,6 @@ function calcPayouts(subsidySats: number, feesSats: number, filledSlots: number)
 export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
   const db = getPool()
 
-  const roundRow = await db.query<{ id: number }>(
-    `SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1`
-  )
-  if (roundRow.rows.length === 0) return []
-  const roundId = roundRow.rows[0].id
-
   const result = await db.query<{
     btc_address: string
     best_share: string
@@ -111,13 +105,15 @@ export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
        (SUM(share_difficulty) * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs,
        BOOL_OR(source_port = 4444)                                   AS is_rental
      FROM shares
-     WHERE round_id = $1
+     WHERE round_id = (SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1)
        AND submitted_at > NOW() - INTERVAL '7 days'
      GROUP BY btc_address
      ORDER BY MAX(true_difficulty) DESC
-     LIMIT $2`,
-    [roundId, limit]
+     LIMIT $1`,
+    [limit]
   )
+
+  if (result.rows.length === 0) return []
 
   const { perSlot } = calcPayouts(SUBSIDY_SATS, 0, result.rows.length)
 
@@ -168,21 +164,27 @@ export interface ExtendedPoolStats extends PoolStats {
 
 export async function getExtendedPoolStats(): Promise<ExtendedPoolStats> {
   const db = getPool()
-  const base = await getPoolStats()
 
   const result = await db.query<{
+    total_blocks: string
+    active_miners_7d: string
+    round_started: Date
+    latest_height: number | null
     accepted_total: string
     best_ever: string
     min_top21: string | null
     pool_hashrate_hs: string
   }>(
-    `WITH best_per_address AS (
+    `WITH active_round AS (
+       SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1
+     ),
+     best_per_address AS (
        SELECT btc_address,
-              MAX(share_difficulty) AS best_share
+              MAX(true_difficulty) AS best_share
        FROM shares
        WHERE submitted_at > NOW() - INTERVAL '7 days'
          AND is_stale = false
-         AND round_id = (SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1)
+         AND round_id = (SELECT id FROM active_round)
        GROUP BY btc_address
      ),
      ranked AS (
@@ -191,18 +193,26 @@ export async function getExtendedPoolStats(): Promise<ExtendedPoolStats> {
        FROM best_per_address
      )
      SELECT
-       (SELECT COUNT(*)::TEXT FROM shares WHERE is_stale = false)          AS accepted_total,
-       (SELECT MAX(share_difficulty)::TEXT FROM shares)                    AS best_ever,
-       (SELECT MIN(best_share)::TEXT FROM ranked WHERE rnk <= 21)          AS min_top21,
+       (SELECT COUNT(*)::TEXT FROM blocks)                                           AS total_blocks,
+       (SELECT COUNT(DISTINCT btc_address)::TEXT FROM shares
+          WHERE submitted_at > NOW() - INTERVAL '7 days')                           AS active_miners_7d,
+       (SELECT started_at FROM active_round)                                         AS round_started,
+       (SELECT height FROM blocks ORDER BY found_at DESC LIMIT 1)                   AS latest_height,
+       (SELECT COUNT(*)::TEXT FROM shares WHERE is_stale = false)                   AS accepted_total,
+       (SELECT MAX(true_difficulty)::TEXT FROM shares)                              AS best_ever,
+       (SELECT MIN(best_share)::TEXT FROM ranked WHERE rnk <= 21)                  AS min_top21,
        (SELECT (COALESCE(SUM(share_difficulty), 0) * 4294967296.0 / 600)::TEXT
           FROM shares
           WHERE submitted_at > NOW() - INTERVAL '10 minutes'
-            AND is_stale = false)                                           AS pool_hashrate_hs`
+            AND is_stale = false)                                                    AS pool_hashrate_hs`
   )
 
   const row = result.rows[0]
   return {
-    ...base,
+    totalBlocks: parseInt(row.total_blocks ?? '0', 10),
+    activeMiners7d: parseInt(row.active_miners_7d ?? '0', 10),
+    currentRoundStarted: row.round_started,
+    latestBlockHeight: row.latest_height ?? null,
     acceptedSharesTotal: parseInt(row.accepted_total ?? '0', 10),
     bestShareEver: row.best_ever ?? '0',
     minTop21Share: row.min_top21 ?? null,
@@ -276,13 +286,8 @@ export async function getBlock(height: number): Promise<BlockDetail | null> {
 export async function getMinerStats(address: string) {
   const db = getPool()
 
-  const roundRow = await db.query<{ id: number }>(
-    `SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1`
-  )
-  const roundId = roundRow.rows[0]?.id
-
   const [rankResult, historyResult, blockResult] = await Promise.all([
-    // Current rank
+    // Current rank — round id resolved inline
     db.query<{ rank: number | null; best_share: string | null; last_seen: Date | null; hashrate_7d_hs: string | null }>(
       `SELECT rank, best_share, last_seen, hashrate_7d_hs FROM (
          SELECT
@@ -292,11 +297,11 @@ export async function getMinerStats(address: string) {
            RANK() OVER (ORDER BY MAX(true_difficulty) DESC)::INT AS rank,
            (SUM(share_difficulty) * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs
          FROM shares
-         WHERE round_id = $1
+         WHERE round_id = (SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1)
            AND submitted_at > NOW() - INTERVAL '7 days'
          GROUP BY btc_address
-       ) t WHERE btc_address = $2`,
-      [roundId, address]
+       ) t WHERE btc_address = $1`,
+      [address]
     ),
     // Share history last 7 days (hourly buckets)
     db.query<{ hour: Date; count: string; best: string }>(

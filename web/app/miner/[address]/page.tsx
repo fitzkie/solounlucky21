@@ -13,7 +13,7 @@ function timeUntilExpiry(lastSeen: Date | null): { label: string; urgent: boolea
   return { label: `${hours}h ${mins}m`, urgent: true }
 }
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 30
 
 export default async function MinerDetailPage({
   params,

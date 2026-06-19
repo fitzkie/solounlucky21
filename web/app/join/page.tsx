@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic'
-
 function CodeBlock({ children }: { children: string }) {
   return (
     <pre className="bg-black border border-white/10 rounded-lg p-4 text-xs font-mono text-yellow-400 overflow-x-auto whitespace-pre">

@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS shares (
   is_stale          BOOLEAN       NOT NULL DEFAULT FALSE
 );
 
+-- Columns added after initial launch (idempotent ALTER TABLE).
+ALTER TABLE shares ADD COLUMN IF NOT EXISTS true_difficulty NUMERIC(78,0);
+ALTER TABLE shares ADD COLUMN IF NOT EXISTS source_port INTEGER;
+
 -- VARCHAR(90) covers bech32, bech32m (Taproot), and legacy address formats.
 CREATE TABLE IF NOT EXISTS workers (
   btc_address  VARCHAR(90)   NOT NULL,
@@ -76,6 +80,11 @@ CREATE INDEX IF NOT EXISTS idx_shares_round
 -- Partial index on non-stale shares speeds up the rolling leaderboard query.
 CREATE INDEX IF NOT EXISTS idx_shares_ranking
   ON shares (round_id, submitted_at DESC, share_difficulty DESC)
+  WHERE is_stale = false;
+
+-- Index for true_difficulty ranking (used by leaderboard ORDER BY MAX(true_difficulty)).
+CREATE INDEX IF NOT EXISTS idx_shares_true_diff
+  ON shares (round_id, submitted_at DESC, true_difficulty DESC)
   WHERE is_stale = false;
 
 -- -------------------------------------------------------------------------

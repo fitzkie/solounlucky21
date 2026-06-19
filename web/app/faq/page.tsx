@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic'
-
 const FAQS = [
   {
     q: 'How is my rank determined?',

@@ -2,7 +2,7 @@ import { getExtendedPoolStats, getBlocks } from '@/lib/db'
 import { getExternalStats } from '@/lib/external'
 import { formatHashrate, formatDuration, blockProbability, formatBTC, truncate, timeAgo } from '@/lib/format'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 30
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (

@@ -1,5 +1,3 @@
-export const dynamic = 'force-dynamic'
-
 function RuleSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3 pb-8 border-b border-white/10 last:border-0">

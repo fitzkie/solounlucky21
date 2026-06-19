@@ -1,7 +1,7 @@
 import { getLeaderboard } from '@/lib/db'
 import { formatBTC, formatBestShare, truncate } from '@/lib/format'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 30
 
 export default async function LeaderboardPage() {
   const leaderboard = await getLeaderboard(100)

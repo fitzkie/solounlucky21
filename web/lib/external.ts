@@ -12,7 +12,7 @@ const TTL = 60_000
 async function _fetchExternal(): Promise<ExternalStats> {
   const [priceResult, hashrateResult] = await Promise.allSettled([
     fetch('https://mempool.space/api/v1/prices', { cache: 'no-store' }),
-    fetch('https://mempool.space/signet/api/v1/mining/hashrate/1m', { cache: 'no-store' }),
+    fetch('https://mempool.space/api/v1/mining/hashrate/1m', { cache: 'no-store' }),
   ])
 
   let btcPriceUsd: number | null = null
