@@ -7,15 +7,11 @@ export const metadata: Metadata = {
 }
 
 const NAV_LINKS = [
-  { href: '/',             label: 'Home' },
   { href: '/stats',        label: 'Stats' },
-  { href: '/connect',      label: 'Connect' },
+  { href: '/join',         label: 'Join' },
   { href: '/leaderboard',  label: 'Leaderboard' },
-  { href: '/blocks',       label: 'Blocks' },
   { href: '/reward-rules', label: 'Reward Rules' },
   { href: '/miner',        label: 'My Stats' },
-  { href: '/faq',          label: 'FAQ' },
-  { href: '/disclaimer',   label: 'Disclaimer' },
 ]
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -81,6 +77,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="flex justify-center gap-6 text-xs text-white/30">
               <a href="https://t.me/unlucky21solopool" target="_blank" rel="noopener noreferrer" className="hover:text-white/60 transition-colors">Telegram</a>
               <a href="https://x.com/unlucky21pool" target="_blank" rel="noopener noreferrer" className="hover:text-white/60 transition-colors">X (Twitter)</a>
+              <a href="/faq" className="hover:text-white/60 transition-colors">FAQ</a>
               <a href="/disclaimer" className="hover:text-white/60 transition-colors">Disclaimer</a>
               <a href="https://github.com/fitzkie/unlucky21" target="_blank" rel="noopener noreferrer" className="hover:text-white/60 transition-colors">GitHub</a>
             </div>

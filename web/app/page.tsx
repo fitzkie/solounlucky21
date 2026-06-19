@@ -31,7 +31,7 @@ export default async function HomePage() {
         </p>
         <div className="flex justify-center gap-3 pt-2">
           <a
-            href="/connect"
+            href="/join"
             className="inline-flex items-center gap-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold px-6 py-2.5 rounded-xl text-sm transition-colors"
           >
             Start Mining
@@ -159,7 +159,7 @@ export default async function HomePage() {
       <section className="space-y-4">
         <div className="flex items-baseline justify-between">
           <h2 className="text-xs font-bold uppercase tracking-widest text-white/40">Connect Your Miner</h2>
-          <a href="/connect" className="text-xs text-yellow-500 hover:text-yellow-400 transition-colors">Full guide with hardware examples →</a>
+          <a href="/join" className="text-xs text-yellow-500 hover:text-yellow-400 transition-colors">Full guide with hardware examples →</a>
         </div>
         <div className="rounded-xl border border-white/10 p-6 grid md:grid-cols-3 gap-4">
           {[

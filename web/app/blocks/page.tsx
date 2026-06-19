@@ -21,7 +21,7 @@ export default async function BlocksPage() {
           <div className="text-5xl font-black text-white/10">0</div>
           <p className="text-white/30 text-sm">Unlucky21 has not found any blocks…. YET</p>
           <p className="text-white/20 text-xs">Be the first — connect your miner.</p>
-          <a href="/connect" className="inline-block mt-2 text-xs text-yellow-500 hover:text-yellow-400 transition-colors">
+          <a href="/join" className="inline-block mt-2 text-xs text-yellow-500 hover:text-yellow-400 transition-colors">
             How to connect →
           </a>
         </div>
