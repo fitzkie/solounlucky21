@@ -1,6 +1,6 @@
 import { getExtendedPoolStats, getBlocks } from '@/lib/db'
 import { getExternalStats } from '@/lib/external'
-import { formatHashrate, formatDuration, blockProbability, formatBTC, truncate, timeAgo } from '@/lib/format'
+import { formatHashrate, formatDuration, blockProbability, formatBTC, formatBestShare, truncate, timeAgo } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,11 +45,11 @@ export default async function StatsPage() {
           <StatCard label="Accepted Shares (all-time)" value={stats.acceptedSharesTotal.toLocaleString()} />
           <StatCard
             label="All-Time Best Share"
-            value={BigInt(stats.bestShareEver).toLocaleString()}
+            value={formatBestShare(stats.bestShareEver)}
           />
           <StatCard
             label="Min Share to Enter Top 21"
-            value={stats.minTop21Share ? BigInt(stats.minTop21Share).toLocaleString() : 'Any share'}
+            value={stats.minTop21Share ? formatBestShare(stats.minTop21Share) : 'Any share'}
             sub={stats.minTop21Share ? 'current #21 threshold' : 'fewer than 21 miners — join now!'}
           />
           <StatCard

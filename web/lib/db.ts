@@ -157,7 +157,7 @@ export async function getPoolStats(): Promise<PoolStats> {
 
 export interface ExtendedPoolStats extends PoolStats {
   acceptedSharesTotal: number
-  bestShareEver: string        // decimal string — BigInt safe
+  bestShareEver: string        // integer string (rounded from double precision)
   minTop21Share: string | null // null if fewer than 21 miners in leaderboard
   poolHashrateHs: number       // estimated from last 10 minutes of shares
 }
@@ -199,8 +199,8 @@ export async function getExtendedPoolStats(): Promise<ExtendedPoolStats> {
        (SELECT started_at FROM active_round)                                         AS round_started,
        (SELECT height FROM blocks ORDER BY found_at DESC LIMIT 1)                   AS latest_height,
        (SELECT COUNT(*)::TEXT FROM shares WHERE is_stale = false)                   AS accepted_total,
-       (SELECT MAX(true_difficulty)::TEXT FROM shares)                              AS best_ever,
-       (SELECT MIN(best_share)::TEXT FROM ranked WHERE rnk <= 21)                  AS min_top21,
+       (SELECT ROUND(MAX(true_difficulty))::BIGINT::TEXT FROM shares)               AS best_ever,
+       (SELECT ROUND(MIN(best_share))::BIGINT::TEXT FROM ranked WHERE rnk <= 21)  AS min_top21,
        (SELECT (COALESCE(SUM(share_difficulty), 0) * 4294967296.0 / 600)::TEXT
           FROM shares
           WHERE submitted_at > NOW() - INTERVAL '10 minutes'
