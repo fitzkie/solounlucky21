@@ -40,11 +40,11 @@ export function formatDuration(seconds: number): string {
 export function formatBestShare(diff: number | string): string {
   const n = typeof diff === 'string' ? parseFloat(diff) : diff
   if (!n || n <= 0) return '—'
-  if (n >= 1e15) return `${(n / 1e15).toFixed(2)} P`
-  if (n >= 1e12) return `${(n / 1e12).toFixed(2)} T`
-  if (n >= 1e9)  return `${(n / 1e9).toFixed(2)} G`
-  if (n >= 1e6)  return `${(n / 1e6).toFixed(2)} M`
-  if (n >= 1e3)  return `${(n / 1e3).toFixed(2)} K`
+  if (n >= 1e15) return `${(n / 1e15).toFixed(2)} PH`
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2)} TH`
+  if (n >= 1e9)  return `${(n / 1e9).toFixed(2)} GH`
+  if (n >= 1e6)  return `${(n / 1e6).toFixed(2)} MH`
+  if (n >= 1e3)  return `${(n / 1e3).toFixed(2)} KH`
   return n.toFixed(0)
 }
 
