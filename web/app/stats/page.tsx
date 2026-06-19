@@ -75,7 +75,7 @@ export default async function StatsPage() {
           />
           <StatCard
             label="Network Difficulty"
-            value={netDiff ? netDiff.toLocaleString() : '—'}
+            value={netDiff ? formatBestShare(netDiff) : '—'}
             sub="mainnet"
           />
         </div>
