@@ -183,7 +183,7 @@ async function _getExtendedPoolStats(): Promise<ExtendedPoolStats> {
     pool_hashrate_hs: string
   }>(
     `WITH active_round AS (
-       SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1
+       SELECT id, started_at FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1
      ),
      best_per_address AS (
        SELECT btc_address,
