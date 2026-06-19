@@ -1,4 +1,7 @@
 import { Pool } from 'pg'
+import { unstable_cache } from 'next/cache'
+
+const CACHE_TTL = 30 // seconds
 
 // Singleton pool — reused across all API route invocations.
 // Railway's persistent Node.js process keeps this alive between requests.
@@ -86,7 +89,7 @@ function calcPayouts(subsidySats: number, feesSats: number, filledSlots: number)
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
-export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
+async function _getLeaderboard(limit: number): Promise<LeaderboardEntry[]> {
   const db = getPool()
 
   const result = await db.query<{
@@ -128,7 +131,9 @@ export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
   }))
 }
 
-export async function getPoolStats(): Promise<PoolStats> {
+export const getLeaderboard = unstable_cache(_getLeaderboard, ['leaderboard'], { revalidate: CACHE_TTL })
+
+async function _getPoolStats(): Promise<PoolStats> {
   const db = getPool()
 
   const result = await db.query<{
@@ -155,6 +160,8 @@ export async function getPoolStats(): Promise<PoolStats> {
   }
 }
 
+export const getPoolStats = unstable_cache(_getPoolStats, ['pool-stats'], { revalidate: CACHE_TTL })
+
 export interface ExtendedPoolStats extends PoolStats {
   acceptedSharesTotal: number
   bestShareEver: string        // decimal string — BigInt safe
@@ -162,7 +169,7 @@ export interface ExtendedPoolStats extends PoolStats {
   poolHashrateHs: number       // estimated from last 10 minutes of shares
 }
 
-export async function getExtendedPoolStats(): Promise<ExtendedPoolStats> {
+async function _getExtendedPoolStats(): Promise<ExtendedPoolStats> {
   const db = getPool()
 
   const result = await db.query<{
@@ -220,7 +227,9 @@ export async function getExtendedPoolStats(): Promise<ExtendedPoolStats> {
   }
 }
 
-export async function getBlocks(limit = 20, offset = 0): Promise<BlockSummary[]> {
+export const getExtendedPoolStats = unstable_cache(_getExtendedPoolStats, ['extended-pool-stats'], { revalidate: CACHE_TTL })
+
+async function _getBlocks(limit = 20, offset = 0): Promise<BlockSummary[]> {
   const db = getPool()
 
   const result = await db.query<{
@@ -247,6 +256,8 @@ export async function getBlocks(limit = 20, offset = 0): Promise<BlockSummary[]>
     slotsFilled: Array.isArray(row.top_21_snapshot) ? row.top_21_snapshot.length : 0,
   }))
 }
+
+export const getBlocks = unstable_cache(_getBlocks, ['blocks'], { revalidate: CACHE_TTL })
 
 export async function getBlock(height: number): Promise<BlockDetail | null> {
   const db = getPool()

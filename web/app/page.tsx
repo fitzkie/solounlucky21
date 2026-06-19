@@ -1,7 +1,7 @@
 import { getPoolStats, getLeaderboard } from '@/lib/db'
 import { formatBTC } from '@/lib/format'
 
-export const revalidate = 30
+export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
   const [stats, leaderboard] = await Promise.all([getPoolStats(), getLeaderboard(21)])

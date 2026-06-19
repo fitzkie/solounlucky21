@@ -1,7 +1,7 @@
 import { getBlocks } from '@/lib/db'
 import { formatBTC, truncate, timeAgo } from '@/lib/format'
 
-export const revalidate = 30
+export const dynamic = 'force-dynamic'
 
 export default async function BlocksPage() {
   const blocks = await getBlocks(50)
