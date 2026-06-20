@@ -151,92 +151,119 @@ type snapshotEntry struct {
 	AmountSats int64  `json:"amount_sats"`
 }
 
-// ResetForBlock atomically:
-//  1. Snapshots the current top 21
-//  2. Inserts a block record with the snapshot
-//  3. Closes the current round (sets ended_at, block_id)
-//  4. Opens a new round
-//
-// Returns the snapshot entries and the new round ID.
-func (s *Service) ResetForBlock(ctx context.Context, bf BlockFound) ([]Entry, int64, error) {
-	// Read snapshot using the pool (outside tx) for a consistent view before
-	// we mutate anything.
-	snapshot, err := s.GetTop21(ctx, bf.RoundID)
-	if err != nil {
-		return nil, 0, fmt.Errorf("ResetForBlock snapshot: %w", err)
-	}
+// UnconfirmedBlock holds minimal fields for polling confirmation status.
+type UnconfirmedBlock struct {
+	ID      int64
+	Hash    string
+	Height  int32
+	RoundID int64
+}
 
-	// Compute per-slot amount using same formula as coinbase.BuildOutputs.
-	total := int64(312_500_000) + bf.FeesSats
+// buildSnapshot computes payout amounts and marshals the top-21 snapshot JSON.
+func buildSnapshot(snapshot []Entry, feesSats int64) ([]byte, error) {
+	total := int64(312_500_000) + feesSats
 	finderAmount := int64(float64(total) * coinbase.FinderPercent)
 	poolFeeBase := int64(float64(total) * coinbase.PoolFeePercent)
 	remaining := total - finderAmount - poolFeeBase
 	perSlot := remaining / int64(coinbase.MaxRankedSlots)
 
-	// Build snapshot JSON array.
-	snapshotData := make([]snapshotEntry, len(snapshot))
+	data := make([]snapshotEntry, len(snapshot))
 	for i, e := range snapshot {
-		snapshotData[i] = snapshotEntry{
-			Rank:       e.Rank,
-			Address:    e.BTCAddress,
-			AmountSats: perSlot,
-		}
+		data[i] = snapshotEntry{Rank: e.Rank, Address: e.BTCAddress, AmountSats: perSlot}
 	}
-	snapshotJSON, err := json.Marshal(snapshotData)
+	return json.Marshal(data)
+}
+
+// RecordUnconfirmedBlock inserts a block row with confirmed=false.
+// It does NOT close the current round — call ConfirmBlock once the block
+// reaches ≥2 confirmations on the main chain.
+func (s *Service) RecordUnconfirmedBlock(ctx context.Context, bf BlockFound) (int64, error) {
+	snapshot, err := s.GetTop21(ctx, bf.RoundID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("ResetForBlock marshal snapshot: %w", err)
+		return 0, fmt.Errorf("RecordUnconfirmedBlock snapshot: %w", err)
 	}
 
-	// Begin transaction.
-	tx, err := s.pool.Begin(ctx)
+	snapshotJSON, err := buildSnapshot(snapshot, bf.FeesSats)
 	if err != nil {
-		return nil, 0, fmt.Errorf("ResetForBlock begin tx: %w", err)
+		return 0, fmt.Errorf("RecordUnconfirmedBlock marshal: %w", err)
 	}
-	defer func() {
-		// Rollback is a no-op if the tx was already committed.
-		_ = tx.Rollback(ctx)
-	}()
 
-	// 1. Insert block record, get back id.
 	var blockID int64
-	err = tx.QueryRow(ctx,
+	err = s.pool.QueryRow(ctx,
 		`INSERT INTO blocks
-		   (round_id, height, hash, finder_address, coinbase_txid, top_21_snapshot, block_fees_sats)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		   (round_id, height, hash, finder_address, coinbase_txid, top_21_snapshot, block_fees_sats, confirmed)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, false)
 		 RETURNING id`,
-		bf.RoundID,
-		bf.Height,
-		bf.Hash,
-		bf.FinderAddress,
-		bf.CoinbaseTxID,
-		snapshotJSON,
-		bf.FeesSats,
+		bf.RoundID, bf.Height, bf.Hash, bf.FinderAddress, bf.CoinbaseTxID, snapshotJSON, bf.FeesSats,
 	).Scan(&blockID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("ResetForBlock insert block: %w", err)
+		return 0, fmt.Errorf("RecordUnconfirmedBlock insert: %w", err)
+	}
+	return blockID, nil
+}
+
+// ConfirmBlock marks a block confirmed and finalizes its round.
+// Closes the round associated with the block and opens a new one.
+// Returns the new round ID. If the round was already closed (e.g. double-confirm),
+// it sets confirmed=true and returns without opening another round.
+func (s *Service) ConfirmBlock(ctx context.Context, blockID int64) (int64, error) {
+	var roundID int64
+	if err := s.pool.QueryRow(ctx, `SELECT round_id FROM blocks WHERE id=$1`, blockID).Scan(&roundID); err != nil {
+		return 0, fmt.Errorf("ConfirmBlock get round_id: %w", err)
 	}
 
-	// 2. Close the current round.
-	_, err = tx.Exec(ctx,
-		`UPDATE rounds SET ended_at = NOW(), block_id = $1 WHERE id = $2`,
-		blockID, bf.RoundID,
-	)
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return nil, 0, fmt.Errorf("ResetForBlock close round: %w", err)
+		return 0, fmt.Errorf("ConfirmBlock begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var alreadyClosed bool
+	_ = tx.QueryRow(ctx, `SELECT ended_at IS NOT NULL FROM rounds WHERE id=$1`, roundID).Scan(&alreadyClosed)
+	if alreadyClosed {
+		if _, err = tx.Exec(ctx, `UPDATE blocks SET confirmed=true WHERE id=$1`, blockID); err != nil {
+			return 0, fmt.Errorf("ConfirmBlock mark confirmed (round already closed): %w", err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return 0, fmt.Errorf("ConfirmBlock commit (round already closed): %w", err)
+		}
+		return roundID, nil
 	}
 
-	// 3. Open a new round.
+	if _, err = tx.Exec(ctx, `UPDATE blocks SET confirmed=true WHERE id=$1`, blockID); err != nil {
+		return 0, fmt.Errorf("ConfirmBlock mark confirmed: %w", err)
+	}
+	if _, err = tx.Exec(ctx, `UPDATE rounds SET ended_at=NOW(), block_id=$1 WHERE id=$2`, blockID, roundID); err != nil {
+		return 0, fmt.Errorf("ConfirmBlock close round: %w", err)
+	}
+
 	var newRoundID int64
-	err = tx.QueryRow(ctx,
-		`INSERT INTO rounds (started_at) VALUES (NOW()) RETURNING id`,
-	).Scan(&newRoundID)
-	if err != nil {
-		return nil, 0, fmt.Errorf("ResetForBlock open new round: %w", err)
+	if err = tx.QueryRow(ctx, `INSERT INTO rounds (started_at) VALUES (NOW()) RETURNING id`).Scan(&newRoundID); err != nil {
+		return 0, fmt.Errorf("ConfirmBlock open new round: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return nil, 0, fmt.Errorf("ResetForBlock commit: %w", err)
+		return 0, fmt.Errorf("ConfirmBlock commit: %w", err)
 	}
+	return newRoundID, nil
+}
 
-	return snapshot, newRoundID, nil
+// GetUnconfirmedBlocks returns all blocks with confirmed=false, oldest first.
+func (s *Service) GetUnconfirmedBlocks(ctx context.Context) ([]UnconfirmedBlock, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, hash, height, round_id FROM blocks WHERE confirmed=false ORDER BY found_at ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("GetUnconfirmedBlocks: %w", err)
+	}
+	defer rows.Close()
+
+	var blocks []UnconfirmedBlock
+	for rows.Next() {
+		var b UnconfirmedBlock
+		if err := rows.Scan(&b.ID, &b.Hash, &b.Height, &b.RoundID); err != nil {
+			return nil, fmt.Errorf("GetUnconfirmedBlocks scan: %w", err)
+		}
+		blocks = append(blocks, b)
+	}
+	return blocks, rows.Err()
 }

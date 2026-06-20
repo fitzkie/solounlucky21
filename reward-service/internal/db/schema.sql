@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS shares (
 -- Columns added after initial launch (idempotent ALTER TABLE).
 ALTER TABLE shares ADD COLUMN IF NOT EXISTS true_difficulty NUMERIC(78,0);
 ALTER TABLE shares ADD COLUMN IF NOT EXISTS source_port INTEGER;
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS confirmed BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- VARCHAR(90) covers bech32, bech32m (Taproot), and legacy address formats.
 CREATE TABLE IF NOT EXISTS workers (
