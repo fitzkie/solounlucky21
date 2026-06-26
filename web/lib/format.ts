@@ -45,7 +45,7 @@ export function formatBestShare(diff: number | string): string {
   if (n >= 1e9)  return `${(n / 1e9).toFixed(2)} GH`
   if (n >= 1e6)  return `${(n / 1e6).toFixed(2)} MH`
   if (n >= 1e3)  return `${(n / 1e3).toFixed(2)} KH`
-  return n.toFixed(0)
+  return `${n.toFixed(0)} H`
 }
 
 export function blockProbability(expectedSeconds: number, windowSeconds: number): string {

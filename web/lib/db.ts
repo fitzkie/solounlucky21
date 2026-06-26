@@ -138,12 +138,12 @@ export async function getPoolStats(): Promise<PoolStats> {
     latest_height: number | null
   }>(
     `SELECT
-       (SELECT COUNT(*)::TEXT FROM blocks) AS total_blocks,
+       (SELECT COUNT(*)::TEXT FROM blocks WHERE confirmed=true) AS total_blocks,
        (SELECT COUNT(DISTINCT btc_address)::TEXT FROM shares
           WHERE submitted_at > NOW() - INTERVAL '7 days') AS active_miners_7d,
        (SELECT started_at FROM rounds WHERE ended_at IS NULL
           ORDER BY started_at DESC LIMIT 1) AS round_started,
-       (SELECT height FROM blocks ORDER BY found_at DESC LIMIT 1) AS latest_height`
+       (SELECT height FROM blocks WHERE confirmed=true ORDER BY found_at DESC LIMIT 1) AS latest_height`
   )
 
   const row = result.rows[0]
@@ -193,11 +193,11 @@ export async function getExtendedPoolStats(): Promise<ExtendedPoolStats> {
        FROM best_per_address
      )
      SELECT
-       (SELECT COUNT(*)::TEXT FROM blocks)                                           AS total_blocks,
+       (SELECT COUNT(*)::TEXT FROM blocks WHERE confirmed=true)                      AS total_blocks,
        (SELECT COUNT(DISTINCT btc_address)::TEXT FROM shares
           WHERE submitted_at > NOW() - INTERVAL '7 days')                           AS active_miners_7d,
        (SELECT started_at FROM active_round)                                         AS round_started,
-       (SELECT height FROM blocks ORDER BY found_at DESC LIMIT 1)                   AS latest_height,
+       (SELECT height FROM blocks WHERE confirmed=true ORDER BY found_at DESC LIMIT 1) AS latest_height,
        (SELECT COUNT(*)::TEXT FROM shares WHERE is_stale = false)                   AS accepted_total,
        (SELECT ROUND(MAX(true_difficulty))::BIGINT::TEXT FROM shares)               AS best_ever,
        (SELECT ROUND(MIN(best_share))::BIGINT::TEXT FROM ranked WHERE rnk <= 21)  AS min_top21,
@@ -233,6 +233,7 @@ async function _getBlocks(limit = 20, offset = 0): Promise<BlockSummary[]> {
   }>(
     `SELECT id, height, found_at, finder_address, block_fees_sats, top_21_snapshot
      FROM blocks
+     WHERE confirmed=true
      ORDER BY found_at DESC
      LIMIT $1 OFFSET $2`,
     [limit, offset]
@@ -324,6 +325,7 @@ export async function getMinerStats(address: string) {
        FROM blocks,
             jsonb_array_elements(top_21_snapshot) AS elem
        WHERE elem->>'address' = $1
+         AND confirmed=true
        ORDER BY found_at DESC LIMIT 10`,
       [address]
     ),
