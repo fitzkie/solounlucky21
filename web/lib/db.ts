@@ -112,7 +112,9 @@ export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
        GROUP BY btc_address
      ),
      alltime AS (
-       SELECT btc_address, MAX(true_difficulty)::TEXT AS best_share
+       SELECT btc_address,
+         MAX(true_difficulty)       AS alltime_best,
+         MAX(true_difficulty)::TEXT AS best_share
        FROM shares
        WHERE round_id = (SELECT id FROM active_round)
        GROUP BY btc_address
@@ -121,12 +123,12 @@ export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
        r.btc_address,
        a.best_share,
        r.last_seen,
-       RANK() OVER (ORDER BY r.recent_best DESC)::INT AS rank,
+       RANK() OVER (ORDER BY a.alltime_best DESC)::INT AS rank,
        (r.sum_diff * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs,
        r.is_rental
      FROM recent r
      JOIN alltime a USING (btc_address)
-     ORDER BY r.recent_best DESC
+     ORDER BY a.alltime_best DESC
      LIMIT $1`,
     [limit]
   )
@@ -324,7 +326,9 @@ export async function getMinerStats(address: string) {
          GROUP BY btc_address
        ),
        alltime AS (
-         SELECT btc_address, MAX(true_difficulty)::TEXT AS best_share
+         SELECT btc_address,
+           MAX(true_difficulty)       AS alltime_best,
+           MAX(true_difficulty)::TEXT AS best_share
          FROM shares
          WHERE round_id = (SELECT id FROM active_round)
          GROUP BY btc_address
@@ -332,7 +336,7 @@ export async function getMinerStats(address: string) {
        SELECT
          a.best_share,
          r.last_seen,
-         RANK() OVER (ORDER BY r.recent_best DESC)::INT AS rank,
+         RANK() OVER (ORDER BY a.alltime_best DESC)::INT AS rank,
          (r.sum_diff * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs
        FROM recent r
        JOIN alltime a USING (btc_address)

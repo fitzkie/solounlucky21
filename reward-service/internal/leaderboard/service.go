@@ -109,7 +109,8 @@ WITH recent AS (
 ),
 alltime AS (
   SELECT btc_address,
-    FLOOR(MAX(true_difficulty))::BIGINT::TEXT AS best_share
+    MAX(true_difficulty)                       AS alltime_best,
+    FLOOR(MAX(true_difficulty))::BIGINT::TEXT  AS best_share
   FROM shares
   WHERE round_id = $1
   GROUP BY btc_address
@@ -117,10 +118,10 @@ alltime AS (
 SELECT r.btc_address,
   a.best_share,
   r.last_activity,
-  RANK() OVER (ORDER BY r.recent_best DESC)::INT AS rank
+  RANK() OVER (ORDER BY a.alltime_best DESC)::INT AS rank
 FROM recent r
 JOIN alltime a USING (btc_address)
-ORDER BY r.recent_best DESC
+ORDER BY a.alltime_best DESC
 LIMIT 21`
 
 	rows, err := s.pool.Query(ctx, query, roundID)
