@@ -98,16 +98,29 @@ func (s *Service) RecordShare(ctx context.Context, sh Share) error {
 // with big.Int.
 func (s *Service) GetTop21(ctx context.Context, roundID int64) ([]Entry, error) {
 	const query = `
-SELECT
-  btc_address,
-  FLOOR(MAX(true_difficulty))::BIGINT::TEXT AS best_share,
-  MAX(submitted_at)           AS last_activity,
-  RANK() OVER (ORDER BY MAX(true_difficulty) DESC)::INT AS rank
-FROM shares
-WHERE round_id = $1
-  AND submitted_at > NOW() - INTERVAL '7 days'
-GROUP BY btc_address
-ORDER BY MAX(true_difficulty) DESC
+WITH recent AS (
+  SELECT btc_address,
+    MAX(true_difficulty) AS recent_best,
+    MAX(submitted_at)    AS last_activity
+  FROM shares
+  WHERE round_id = $1
+    AND submitted_at > NOW() - INTERVAL '7 days'
+  GROUP BY btc_address
+),
+alltime AS (
+  SELECT btc_address,
+    FLOOR(MAX(true_difficulty))::BIGINT::TEXT AS best_share
+  FROM shares
+  WHERE round_id = $1
+  GROUP BY btc_address
+)
+SELECT r.btc_address,
+  a.best_share,
+  r.last_activity,
+  RANK() OVER (ORDER BY r.recent_best DESC)::INT AS rank
+FROM recent r
+JOIN alltime a USING (btc_address)
+ORDER BY r.recent_best DESC
 LIMIT 21`
 
 	rows, err := s.pool.Query(ctx, query, roundID)
@@ -248,10 +261,10 @@ func (s *Service) ConfirmBlock(ctx context.Context, blockID int64) (int64, error
 	return newRoundID, nil
 }
 
-// GetUnconfirmedBlocks returns all blocks with confirmed=false, oldest first.
+// GetUnconfirmedBlocks returns blocks with confirmed=false and is_orphaned=false, oldest first.
 func (s *Service) GetUnconfirmedBlocks(ctx context.Context) ([]UnconfirmedBlock, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, hash, height, round_id FROM blocks WHERE confirmed=false ORDER BY found_at ASC`)
+		`SELECT id, hash, height, round_id FROM blocks WHERE confirmed=false AND is_orphaned=false ORDER BY found_at ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("GetUnconfirmedBlocks: %w", err)
 	}
@@ -266,4 +279,13 @@ func (s *Service) GetUnconfirmedBlocks(ctx context.Context) ([]UnconfirmedBlock,
 		blocks = append(blocks, b)
 	}
 	return blocks, rows.Err()
+}
+
+// MarkOrphaned flags a block as orphaned so the confirmation loop stops polling it.
+func (s *Service) MarkOrphaned(ctx context.Context, blockID int64) error {
+	_, err := s.pool.Exec(ctx, `UPDATE blocks SET is_orphaned=true WHERE id=$1`, blockID)
+	if err != nil {
+		return fmt.Errorf("MarkOrphaned: %w", err)
+	}
+	return nil
 }

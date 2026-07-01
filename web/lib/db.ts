@@ -97,18 +97,36 @@ export async function getLeaderboard(limit = 100): Promise<LeaderboardEntry[]> {
     hashrate_7d_hs: string
     is_rental: boolean
   }>(
-    `SELECT
-       btc_address,
-       MAX(true_difficulty)::TEXT                                    AS best_share,
-       MAX(submitted_at)                                             AS last_seen,
-       RANK() OVER (ORDER BY MAX(true_difficulty) DESC)::INT         AS rank,
-       (SUM(share_difficulty) * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs,
-       BOOL_OR(source_port = 4444)                                   AS is_rental
-     FROM shares
-     WHERE round_id = (SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1)
-       AND submitted_at > NOW() - INTERVAL '7 days'
-     GROUP BY btc_address
-     ORDER BY MAX(true_difficulty) DESC
+    `WITH active_round AS (
+       SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1
+     ),
+     recent AS (
+       SELECT btc_address,
+         MAX(true_difficulty)  AS recent_best,
+         MAX(submitted_at)     AS last_seen,
+         SUM(share_difficulty) AS sum_diff,
+         BOOL_OR(source_port = 4444) AS is_rental
+       FROM shares
+       WHERE round_id = (SELECT id FROM active_round)
+         AND submitted_at > NOW() - INTERVAL '7 days'
+       GROUP BY btc_address
+     ),
+     alltime AS (
+       SELECT btc_address, MAX(true_difficulty)::TEXT AS best_share
+       FROM shares
+       WHERE round_id = (SELECT id FROM active_round)
+       GROUP BY btc_address
+     )
+     SELECT
+       r.btc_address,
+       a.best_share,
+       r.last_seen,
+       RANK() OVER (ORDER BY r.recent_best DESC)::INT AS rank,
+       (r.sum_diff * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs,
+       r.is_rental
+     FROM recent r
+     JOIN alltime a USING (btc_address)
+     ORDER BY r.recent_best DESC
      LIMIT $1`,
     [limit]
   )
@@ -292,18 +310,33 @@ export async function getMinerStats(address: string) {
   const [rankResult, historyResult, blockResult] = await Promise.all([
     // Current rank — round id resolved inline
     db.query<{ rank: number | null; best_share: string | null; last_seen: Date | null; hashrate_7d_hs: string | null }>(
-      `SELECT rank, best_share, last_seen, hashrate_7d_hs FROM (
-         SELECT
-           btc_address,
-           MAX(true_difficulty)::TEXT AS best_share,
-           MAX(submitted_at)           AS last_seen,
-           RANK() OVER (ORDER BY MAX(true_difficulty) DESC)::INT AS rank,
-           (SUM(share_difficulty) * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs
+      `WITH active_round AS (
+         SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1
+       ),
+       recent AS (
+         SELECT btc_address,
+           MAX(true_difficulty) AS recent_best,
+           MAX(submitted_at)    AS last_seen,
+           SUM(share_difficulty) AS sum_diff
          FROM shares
-         WHERE round_id = (SELECT id FROM rounds WHERE ended_at IS NULL ORDER BY started_at DESC LIMIT 1)
+         WHERE round_id = (SELECT id FROM active_round)
            AND submitted_at > NOW() - INTERVAL '7 days'
          GROUP BY btc_address
-       ) t WHERE btc_address = $1`,
+       ),
+       alltime AS (
+         SELECT btc_address, MAX(true_difficulty)::TEXT AS best_share
+         FROM shares
+         WHERE round_id = (SELECT id FROM active_round)
+         GROUP BY btc_address
+       )
+       SELECT
+         a.best_share,
+         r.last_seen,
+         RANK() OVER (ORDER BY r.recent_best DESC)::INT AS rank,
+         (r.sum_diff * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs
+       FROM recent r
+       JOIN alltime a USING (btc_address)
+       WHERE r.btc_address = $1`,
       [address]
     ),
     // Share history last 7 days (hourly buckets)
