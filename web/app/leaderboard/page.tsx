@@ -16,7 +16,7 @@ export default async function LeaderboardPage() {
       <div>
         <h1 className="text-3xl font-black">Leaderboard</h1>
         <p className="text-white/40 text-sm mt-1">
-          Top 100 by 7-day best share. Rows 1–21 receive a payout when the pool finds a block.
+          Top 100 by best share this round. Must be active in the past 7 days. Rows 1–21 receive a payout when the pool finds a block.
         </p>
       </div>
 
