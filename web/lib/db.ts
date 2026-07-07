@@ -333,14 +333,18 @@ export async function getMinerStats(address: string) {
          WHERE round_id = (SELECT id FROM active_round)
          GROUP BY btc_address
        )
-       SELECT
-         a.best_share,
-         r.last_seen,
-         RANK() OVER (ORDER BY a.alltime_best DESC)::INT AS rank,
-         (r.sum_diff * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs
-       FROM recent r
-       JOIN alltime a USING (btc_address)
-       WHERE r.btc_address = $1`,
+       ranked AS (
+         SELECT
+           r.btc_address,
+           a.best_share,
+           r.last_seen,
+           RANK() OVER (ORDER BY a.alltime_best DESC)::INT AS rank,
+           (r.sum_diff * 4294967296.0 / (7.0 * 86400))::TEXT AS hashrate_7d_hs
+         FROM recent r
+         JOIN alltime a USING (btc_address)
+       )
+       SELECT rank, best_share, last_seen, hashrate_7d_hs
+       FROM ranked WHERE btc_address = $1`,
       [address]
     ),
     // Share history last 7 days (hourly buckets)
