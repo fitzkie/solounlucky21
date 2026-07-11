@@ -107,13 +107,27 @@ WITH recent AS (
     AND submitted_at > NOW() - INTERVAL '7 days'
   GROUP BY btc_address
 ),
-alltime AS (
-  SELECT btc_address,
-    MAX(true_difficulty)                       AS alltime_best,
-    FLOOR(MAX(true_difficulty))::BIGINT::TEXT  AS best_share
+gaps AS (
+  SELECT btc_address, submitted_at,
+    submitted_at - LAG(submitted_at) OVER (PARTITION BY btc_address ORDER BY submitted_at) AS gap_before
   FROM shares
   WHERE round_id = $1
+),
+session_starts AS (
+  SELECT btc_address, MAX(submitted_at) AS session_start
+  FROM gaps
+  WHERE gap_before > INTERVAL '7 days'
   GROUP BY btc_address
+),
+alltime AS (
+  SELECT s.btc_address,
+    MAX(s.true_difficulty)                       AS alltime_best,
+    FLOOR(MAX(s.true_difficulty))::BIGINT::TEXT  AS best_share
+  FROM shares s
+  LEFT JOIN session_starts ss ON s.btc_address = ss.btc_address
+  WHERE s.round_id = $1
+    AND s.submitted_at >= COALESCE(ss.session_start, '-infinity'::TIMESTAMPTZ)
+  GROUP BY s.btc_address
 )
 SELECT r.btc_address,
   a.best_share,
