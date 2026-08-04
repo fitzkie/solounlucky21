@@ -31,7 +31,8 @@ type recordShareCall struct {
 	btcAddress string
 	workerName string
 	difficulty string
-	isStale    bool
+	trueDiff   float64
+	sourcePort int
 }
 
 type blockFoundCall struct {
@@ -55,14 +56,15 @@ func (m *mockHandler) GetCoinbaseOutputs(minerAddress string, feesSats int64) ([
 	return []Output{{Address: minerAddress, AmountSats: 50_000_000}}, nil
 }
 
-func (m *mockHandler) RecordShare(btcAddress, workerName, difficulty string, isStale bool) error {
+func (m *mockHandler) RecordShare(btcAddress, workerName, difficulty string, trueDiff float64, sourcePort int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.recordShareCalls = append(m.recordShareCalls, recordShareCall{
 		btcAddress: btcAddress,
 		workerName: workerName,
 		difficulty: difficulty,
-		isStale:    isStale,
+		trueDiff:   trueDiff,
+		sourcePort: sourcePort,
 	})
 	return nil
 }
@@ -208,11 +210,12 @@ func TestServer_ShareSubmit(t *testing.T) {
 	sockPath := startTestServer(t, h)
 
 	req := map[string]interface{}{
-		"type":        "share",
-		"btc_address": "bc1qworker456",
-		"worker_name": "rig1",
-		"difficulty":  "4831838208",
-		"is_stale":    false,
+		"type":             "share",
+		"btc_address":     "bc1qworker456",
+		"worker_name":     "rig1",
+		"difficulty":      "4831838208",
+		"true_difficulty": float64(4831838208),
+		"source_port":     3333,
 	}
 
 	// Fire-and-forget: no response expected.
@@ -240,8 +243,8 @@ func TestServer_ShareSubmit(t *testing.T) {
 	if call.difficulty != "4831838208" {
 		t.Errorf("difficulty = %q, want %q", call.difficulty, "4831838208")
 	}
-	if call.isStale {
-		t.Error("isStale = true, want false")
+	if call.sourcePort != 3333 {
+		t.Errorf("sourcePort = %d, want 3333", call.sourcePort)
 	}
 }
 

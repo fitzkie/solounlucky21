@@ -62,7 +62,6 @@ func TestRecordShare_AppearsInLeaderboard(t *testing.T) {
 		BTCAddress: "bc1qtest0001",
 		WorkerName: "rig0",
 		Difficulty: big.NewInt(999_999),
-		IsStale:    false,
 	}
 	if err := svc.RecordShare(ctx, sh); err != nil {
 		t.Fatalf("RecordShare: %v", err)
@@ -185,15 +184,14 @@ func TestGetTop21_StaleSharesExcluded(t *testing.T) {
 	ctx := context.Background()
 	roundID := activeRoundID(t, pool)
 
-	staleShare := leaderboard.Share{
-		RoundID:    roundID,
-		BTCAddress: "bc1qstale_addr",
-		WorkerName: "stale_rig",
-		Difficulty: big.NewInt(9_999_999),
-		IsStale:    true,
-	}
-	if err := svc.RecordShare(ctx, staleShare); err != nil {
-		t.Fatalf("RecordShare stale: %v", err)
+	// RecordShare always inserts non-stale; use raw SQL to simulate a stale share.
+	_, err := pool.Exec(ctx,
+		`INSERT INTO shares (round_id, btc_address, worker_name, share_difficulty, is_stale)
+		 VALUES ($1, $2, $3, $4::NUMERIC, true)`,
+		roundID, "bc1qstale_addr", "stale_rig", "9999999",
+	)
+	if err != nil {
+		t.Fatalf("insert stale share: %v", err)
 	}
 
 	entries, err := svc.GetTop21(ctx, roundID)
@@ -241,14 +239,13 @@ func TestResetForBlock_ClearsLeaderboard(t *testing.T) {
 		FeesSats:      100_000,
 	}
 
-	snapshot, newRoundID, err := svc.ResetForBlock(ctx, bf)
+	newBlockID, err := svc.RecordUnconfirmedBlock(ctx, bf)
 	if err != nil {
-		t.Fatalf("ResetForBlock: %v", err)
+		t.Fatalf("RecordUnconfirmedBlock: %v", err)
 	}
-
-	// Snapshot must be non-empty (we had 2 miners).
-	if len(snapshot) == 0 {
-		t.Error("expected non-empty snapshot, got empty")
+	newRoundID, err := svc.ConfirmBlock(ctx, newBlockID)
+	if err != nil {
+		t.Fatalf("ConfirmBlock: %v", err)
 	}
 
 	// New round must differ from old round.

@@ -180,9 +180,15 @@ func (s *Server) handleShare(msg *inboundMsg) {
 }
 
 func (s *Server) handleBlockFound(conn net.Conn, msg *inboundMsg) {
+	// Extend deadline: DB round-trips (GetTop21 + INSERT) can exceed 500ms.
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+
 	if err := s.handler.BlockFound(msg.Height, msg.Hash, msg.FinderAddress, msg.CoinbaseTxID, msg.FeesSats); err != nil {
-		slog.Error("socket: BlockFound failed", "height", msg.Height, "err", err)
-		// Still send ack so datum_gateway is not stalled; the error is logged above.
+		slog.Error("socket: BlockFound failed — block NOT recorded in DB", "height", msg.Height, "err", err)
+		resp, _ := json.Marshal(ackResponse{Status: "error"})
+		resp = append(resp, '\n')
+		_, _ = conn.Write(resp)
+		return
 	}
 
 	resp, err := json.Marshal(ackResponse{Status: "ok"})

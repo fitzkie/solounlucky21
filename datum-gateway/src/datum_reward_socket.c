@@ -329,11 +329,19 @@ void datum_reward_share_submit(const char *username, uint64_t difficulty, double
         strncpy(btc_addr, username, REWARD_ADDR_LEN - 1);
     }
 
-    fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (!is_valid_btc_address(btc_addr)) return;
+    for (size_t _i = 0; worker[_i]; _i++) {
+        char _c = worker[_i];
+        if (!((_c >= 'a' && _c <= 'z') || (_c >= 'A' && _c <= 'Z') ||
+              (_c >= '0' && _c <= '9') || _c == '_' || _c == '-')) return;
+    }
+
+    fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) return;
 
     struct timeval tv = {0, 20000}; /* 20ms max */
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
@@ -383,6 +391,8 @@ void datum_reward_block_found(int32_t height, const char *hash_hex, const char *
     } else {
         strncpy(btc_addr, finder_addr, REWARD_ADDR_LEN - 1);
     }
+
+    if (!is_valid_btc_address(btc_addr)) { close(fd); return; }
 
     snprintf(req, sizeof(req),
         "{\"type\":\"block_found\",\"height\":%d,\"hash\":\"%s\","

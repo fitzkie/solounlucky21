@@ -408,7 +408,7 @@ _EXT_REPLACEMENT = (
     "\t\t\t/* -- UNLUCKY21: ACK extranonce.subscribe so MRR/T21 proxy sessions don't stall -- */\n"
     "\t\t\tif (!strcmp(method, \"mining.extranonce.subscribe\")) {\n"
     "\t\t\t\tchar r[64];\n"
-    "\t\t\t\tsnprintf(r, sizeof(r), \"{\\\"error\\\":null,\\\"id\\\":%\\\"PRIu64\\\",\\\"result\\\":true}\\n\", id);\n"
+    "\t\t\t\tsnprintf(r, sizeof(r), \"{\\\"error\\\":null,\\\"id\\\":%llu,\\\"result\\\":true}\\n\", (unsigned long long)id);\n"
     "\t\t\t\tdatum_socket_send_string_to_client(c, r);\n"
     "\t\t\t\tjson_decref(j);\n"
     "\t\t\t\treturn 0;\n"

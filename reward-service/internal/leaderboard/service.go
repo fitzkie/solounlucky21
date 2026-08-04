@@ -105,6 +105,7 @@ WITH recent AS (
   FROM shares
   WHERE round_id = $1
     AND submitted_at > NOW() - INTERVAL '7 days'
+    AND is_stale = false
   GROUP BY btc_address
 ),
 gaps AS (
@@ -112,6 +113,7 @@ gaps AS (
     submitted_at - LAG(submitted_at) OVER (PARTITION BY btc_address ORDER BY submitted_at) AS gap_before
   FROM shares
   WHERE round_id = $1
+    AND is_stale = false
 ),
 session_starts AS (
   SELECT btc_address, MAX(submitted_at) AS session_start
@@ -126,6 +128,7 @@ alltime AS (
   FROM shares s
   LEFT JOIN session_starts ss ON s.btc_address = ss.btc_address
   WHERE s.round_id = $1
+    AND s.is_stale = false
     AND s.submitted_at >= COALESCE(ss.session_start, '-infinity'::TIMESTAMPTZ)
   GROUP BY s.btc_address
 )
