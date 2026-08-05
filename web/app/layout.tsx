@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: '/solo',         label: 'BTC Solo' },
   { href: '/reward-rules', label: 'Reward Rules' },
   { href: '/miner',        label: 'Miner' },
+  { href: 'https://triviumpools.com/', label: 'Trivium Pools', external: true },
 ]
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <a
                   key={l.href}
                   href={l.href}
+                  {...(l.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   className="px-3.5 py-2 rounded-lg text-sm text-white/50 hover:text-white hover:bg-white/5 whitespace-nowrap transition-colors font-medium"
                 >
                   {l.label}
@@ -76,6 +78,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </a>.
             </p>
             <div className="flex justify-center gap-6 text-xs text-white/30">
+              <a href="https://triviumpools.com/" target="_blank" rel="noopener noreferrer" className="hover:text-white/60 transition-colors">Trivium Pools</a>
               <a href="https://t.me/unlucky21solopool" target="_blank" rel="noopener noreferrer" className="hover:text-white/60 transition-colors">Telegram</a>
               <a href="https://x.com/unlucky21pool" target="_blank" rel="noopener noreferrer" className="hover:text-white/60 transition-colors">X (Twitter)</a>
               <a href="/faq" className="hover:text-white/60 transition-colors">FAQ</a>
