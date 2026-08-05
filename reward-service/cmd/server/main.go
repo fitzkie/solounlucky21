@@ -14,6 +14,7 @@ import (
 	"unlucky21/reward/internal/db"
 	"unlucky21/reward/internal/leaderboard"
 	"unlucky21/reward/internal/socket"
+	"unlucky21/reward/internal/solo"
 )
 
 // poolHandler satisfies socket.Handler by delegating to the leaderboard service
@@ -141,8 +142,12 @@ func (h *poolHandler) checkConfirmations(ctx context.Context) {
 			continue
 		}
 		if confs < 0 {
-			slog.Warn("block is orphaned — round continues",
-				"height", b.Height, "hash", b.Hash)
+			if err := h.svc.MarkOrphaned(ctx, b.ID); err != nil {
+				slog.Error("mark orphaned failed", "block_id", b.ID, "err", err)
+			} else {
+				slog.Warn("block orphaned — marked, round continues",
+					"height", b.Height, "hash", b.Hash)
+			}
 			continue
 		}
 		if confs < 2 {
@@ -235,9 +240,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	rpc := bitcoinrpc.New(rpcURL, rpcUser, rpcPass)
+
 	handler := &poolHandler{
 		svc:       leaderboard.New(pool),
-		rpcClient: bitcoinrpc.New(rpcURL, rpcUser, rpcPass),
+		rpcClient: rpc,
 		roundID:   roundID,
 	}
 	handler.startRefreshLoop(ctx)
@@ -246,10 +253,28 @@ func main() {
 	// Do initial leaderboard load before accepting connections.
 	handler.refreshLeaderboard(ctx)
 
-	srv := socket.NewServer(socket.SocketPath, handler)
-	slog.Info("reward service starting", "socket", socket.SocketPath, "round_id", roundID)
-	if err := srv.Listen(); err != nil {
-		slog.Error("socket server error", "err", err)
-		os.Exit(1)
-	}
+	// Start shared pool socket server in background.
+	sharedSrv := socket.NewServer(socket.SocketPath, handler)
+	slog.Info("shared pool socket starting", "socket", socket.SocketPath, "round_id", roundID)
+	go func() {
+		if err := sharedSrv.Listen(); err != nil {
+			slog.Error("shared socket server error", "err", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Start solo pool socket server in background.
+	soloHandler := solo.New(pool, rpc)
+	soloHandler.StartConfirmationLoop(ctx)
+	soloSrv := socket.NewServer(solo.SoloSocketPath, soloHandler)
+	slog.Info("solo pool socket starting", "socket", solo.SoloSocketPath)
+	go func() {
+		if err := soloSrv.Listen(); err != nil {
+			slog.Error("solo socket server error", "err", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Block until context cancelled (both servers run in goroutines above).
+	<-ctx.Done()
 }

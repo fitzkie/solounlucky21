@@ -183,6 +183,22 @@ static int parse_coinbase_response(const char *json, reward_output_list_t *resul
 }
 
 /* --------------------------------------------------------------------------
+ * get_reward_socket_path
+ *
+ * Returns the Unix socket path for the Go reward service.
+ * Checks UNLUCKY21_REWARD_SOCKET env var first; falls back to the
+ * compile-time default.  This allows a second datum_gateway instance
+ * (solo pool, port 5555) to connect to a separate solo socket by setting
+ * Environment=UNLUCKY21_REWARD_SOCKET=/var/run/unlucky21/solo.sock
+ * in its systemd unit without rebuilding the binary.
+ * -------------------------------------------------------------------------- */
+static const char *get_reward_socket_path(void)
+{
+    const char *p = getenv("UNLUCKY21_REWARD_SOCKET");
+    return (p && p[0] != '\0') ? p : REWARD_SOCKET_PATH;
+}
+
+/* --------------------------------------------------------------------------
  * datum_request_coinbase_outputs  (public)
  *
  * Opens a fresh Unix-domain socket connection to the Go reward service,
@@ -250,7 +266,7 @@ int datum_request_coinbase_outputs(
     /* --- Connect --- */
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, REWARD_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+    strncpy(addr.sun_path, get_reward_socket_path(), sizeof(addr.sun_path) - 1);
     addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
@@ -345,7 +361,7 @@ void datum_reward_share_submit(const char *username, uint64_t difficulty, double
 
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, REWARD_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+    strncpy(addr.sun_path, get_reward_socket_path(), sizeof(addr.sun_path) - 1);
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(fd); return; }
 
@@ -377,7 +393,7 @@ void datum_reward_block_found(int32_t height, const char *hash_hex, const char *
 
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, REWARD_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+    strncpy(addr.sun_path, get_reward_socket_path(), sizeof(addr.sun_path) - 1);
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) { close(fd); return; }
 

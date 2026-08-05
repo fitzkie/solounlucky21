@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS shares (
 ALTER TABLE shares ADD COLUMN IF NOT EXISTS true_difficulty NUMERIC(78,0);
 ALTER TABLE shares ADD COLUMN IF NOT EXISTS source_port INTEGER;
 ALTER TABLE blocks ADD COLUMN IF NOT EXISTS confirmed BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE blocks ADD COLUMN IF NOT EXISTS is_orphaned BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- VARCHAR(90) covers bech32, bech32m (Taproot), and legacy address formats.
 CREATE TABLE IF NOT EXISTS workers (
@@ -87,6 +88,26 @@ CREATE INDEX IF NOT EXISTS idx_shares_ranking
 CREATE INDEX IF NOT EXISTS idx_shares_true_diff
   ON shares (round_id, submitted_at DESC, true_difficulty DESC)
   WHERE is_stale = false;
+
+-- -------------------------------------------------------------------------
+-- Solo mining: separate block record table (no rounds, no top-21 snapshot)
+-- -------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS solo_blocks (
+  id               BIGSERIAL    PRIMARY KEY,
+  height           INTEGER      NOT NULL,
+  hash             VARCHAR(64)  NOT NULL UNIQUE,
+  found_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  finder_address   VARCHAR(90)  NOT NULL,
+  coinbase_txid    VARCHAR(64),
+  fees_sats        BIGINT       NOT NULL DEFAULT 0,
+  payout_sats      BIGINT       NOT NULL DEFAULT 0,
+  confirmed        BOOLEAN      NOT NULL DEFAULT FALSE,
+  is_orphaned      BOOLEAN      NOT NULL DEFAULT FALSE
+);
+
+CREATE INDEX IF NOT EXISTS idx_solo_blocks_found_at
+  ON solo_blocks (found_at DESC);
 
 -- -------------------------------------------------------------------------
 -- Bootstrap: insert the first active round if none exists

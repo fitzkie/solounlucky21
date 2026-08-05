@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: '/stats',        label: 'Stats' },
   { href: '/join',         label: 'Join' },
   { href: '/leaderboard',  label: 'Leaderboard' },
+  { href: '/solo',         label: 'BTC Solo' },
   { href: '/reward-rules', label: 'Reward Rules' },
   { href: '/miner',        label: 'Miner' },
 ]

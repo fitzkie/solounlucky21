@@ -413,3 +413,51 @@ export async function getMinerStats(address: string) {
     blocksInTop21: blockResult.rows,
   }
 }
+
+export interface SoloBlock {
+  id: number
+  height: number
+  hash: string
+  foundAt: Date
+  finderAddress: string
+  coinbaseTxid: string | null
+  feesSats: number
+  payoutSats: number
+  confirmed: boolean
+  isOrphaned: boolean
+}
+
+export async function getSoloBlocks(limit = 20): Promise<SoloBlock[]> {
+  const db = getPool()
+  const result = await db.query<{
+    id: number
+    height: number
+    hash: string
+    found_at: Date
+    finder_address: string
+    coinbase_txid: string | null
+    fees_sats: string
+    payout_sats: string
+    confirmed: boolean
+    is_orphaned: boolean
+  }>(
+    `SELECT id, height, hash, found_at, finder_address, coinbase_txid,
+            fees_sats, payout_sats, confirmed, is_orphaned
+     FROM solo_blocks
+     ORDER BY found_at DESC
+     LIMIT $1`,
+    [limit]
+  )
+  return result.rows.map(r => ({
+    id: r.id,
+    height: r.height,
+    hash: r.hash,
+    foundAt: r.found_at,
+    finderAddress: r.finder_address,
+    coinbaseTxid: r.coinbase_txid,
+    feesSats: parseInt(r.fees_sats, 10),
+    payoutSats: parseInt(r.payout_sats, 10),
+    confirmed: r.confirmed,
+    isOrphaned: r.is_orphaned,
+  }))
+}
