@@ -6,7 +6,9 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     const stats = await getExtendedPoolStats()
-    return NextResponse.json(stats)
+    return NextResponse.json(stats, {
+      headers: { 'Access-Control-Allow-Origin': 'https://triviumpools.com' },
+    })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('stats API error:', msg)
