@@ -610,6 +610,140 @@ else:
     sys.exit(1)
 
 
+# ─── 10. datum_stratum.h: add prev-job personal coinb2 fields ────────────────
+# S19k Pro (and large-pipeline ASICs generally) keep hashing the old stratum job
+# for a few seconds after receiving clean_jobs=true.  Shares submitted during
+# that drain window arrive with the OLD job's global_index, but personal_coinb2_job_index
+# has already been bumped to the NEW job → server falls back to standard coinb2 →
+# completely different merkle root → 100% H-not-zero → LUXminer crash loop.
+#
+# Fix: cache ONE prior job's personal coinb2 binary so reconstruction still
+# uses the correct coinb2 for shares submitted during the ASIC pipeline drain.
+# One prev slot covers all known ASICs; the drain lasts at most ~10 s.
+
+_P10_MARKER = "/* -- UNLUCKY21: prev-job personal coinb2"
+
+_P10_TARGET = (
+    "\tint           personal_coinb2_len;\n"
+    "\tbool          personal_coinb2_valid;\n"
+    "\tint           personal_coinb2_job_index;\n"
+)
+
+_P10_REPLACEMENT = (
+    "\tint           personal_coinb2_len;\n"
+    "\tbool          personal_coinb2_valid;\n"
+    "\tint           personal_coinb2_job_index;\n"
+    "\t/* -- UNLUCKY21: prev-job personal coinb2 — use to reconstruct old-job shares */\n"
+    "\t/* submitted during ASIC pipeline drain after a job change (S19k Pro fix). */\n"
+    "\tunsigned char personal_coinb2_prev_bin[STRATUM_COINBASE2_MAX_LEN >> 1];\n"
+    "\tint           personal_coinb2_prev_len;\n"
+    "\tbool          personal_coinb2_prev_valid;\n"
+    "\tint           personal_coinb2_prev_job_index;\n"
+)
+
+with open(STRATUM_H) as f:
+    sh10 = f.read()
+
+if _P10_MARKER in sh10:
+    print("[datum_stratum.h prev coinb2 fields] Already patched — skipping")
+elif _P10_TARGET in sh10:
+    sh10 = sh10.replace(_P10_TARGET, _P10_REPLACEMENT, 1)
+    with open(STRATUM_H, "w") as f:
+        f.write(sh10)
+    print("[datum_stratum.h prev coinb2 fields] Patched — prev-job personal coinb2 fields added")
+else:
+    print(f"ERROR: Patch 10 target not found in {STRATUM_H}")
+    sys.exit(1)
+
+
+# ─── 11. datum_stratum.c: send_mining_notify — save to prev before rebuilding ─
+# When the job changes and we need to rebuild personal coinb2, save the current
+# (now-outgoing) personal coinb2 into the prev slot so submit can find it.
+# This must happen inside the rebuild condition block, before the rebuild.
+
+_P11_MARKER = "/* -- UNLUCKY21: save current personal coinb2 as prev before rebuilding */"
+
+_P11_TARGET = (
+    "\t\t\tif (!m->personal_coinb2_valid ||\n"
+    "\t\t\t\t\tm->personal_coinb2_job_index != j->global_index) {\n"
+    "\t\t\t\tchar _btc[REWARD_ADDR_LEN] = {0};\n"
+)
+
+_P11_REPLACEMENT = (
+    "\t\t\tif (!m->personal_coinb2_valid ||\n"
+    "\t\t\t\t\tm->personal_coinb2_job_index != j->global_index) {\n"
+    "\t\t\t\t/* -- UNLUCKY21: save current personal coinb2 as prev before rebuilding */\n"
+    "\t\t\t\t/* so old-job shares submitted during ASIC pipeline drain can reconstruct */\n"
+    "\t\t\t\t/* with the correct coinb2 instead of falling back to the standard one. */\n"
+    "\t\t\t\tif (m->personal_coinb2_valid) {\n"
+    "\t\t\t\t\tmemcpy(m->personal_coinb2_prev_bin, m->personal_coinb2_bin,\n"
+    "\t\t\t\t\t\t   m->personal_coinb2_len);\n"
+    "\t\t\t\t\tm->personal_coinb2_prev_len = m->personal_coinb2_len;\n"
+    "\t\t\t\t\tm->personal_coinb2_prev_valid = true;\n"
+    "\t\t\t\t\tm->personal_coinb2_prev_job_index = m->personal_coinb2_job_index;\n"
+    "\t\t\t\t}\n"
+    "\t\t\t\tchar _btc[REWARD_ADDR_LEN] = {0};\n"
+)
+
+with open(STRATUM_C) as f:
+    sc11 = f.read()
+
+if _P11_MARKER in sc11:
+    print("[datum_stratum.c send_mining_notify save-to-prev] Already patched — skipping")
+elif _P11_TARGET in sc11:
+    sc11 = sc11.replace(_P11_TARGET, _P11_REPLACEMENT, 1)
+    with open(STRATUM_C, "w") as f:
+        f.write(sc11)
+    print("[datum_stratum.c send_mining_notify save-to-prev] Patched — saves prev coinb2 before rebuild")
+else:
+    print(f"ERROR: Patch 11 target not found in {STRATUM_C}")
+    sys.exit(1)
+
+
+# ─── 12. datum_stratum.c: client_mining_submit — prev-slot fallback ───────────
+# When reconstructing the coinbase for a submitted share, if the current-job
+# personal coinb2 doesn't match (because the job advanced while the ASIC was
+# still draining its pipeline), try the prev-job personal coinb2 before falling
+# back to the standard (shared) coinb2.  The prev slot is always exactly one
+# job behind, which covers the full drain window.
+
+_P12_MARKER = "/* -- UNLUCKY21: ASIC pipeline drain"
+
+_P12_TARGET = (
+    "\t} else {\n"
+    "\t\tmemcpy(&full_cb_txn[cb->coinb1_len+12], cb->coinb2_bin, cb->coinb2_len);\n"
+    "\t}"
+)
+
+_P12_REPLACEMENT = (
+    "\t} else if (!empty_work && m->personal_coinb2_prev_valid &&\n"
+    "\t\t\t\tm->personal_coinb2_prev_job_index == job->global_index) {\n"
+    "\t\t/* -- UNLUCKY21: ASIC pipeline drain — use prev job personal coinb2 for old-job shares */\n"
+    "\t\t/* S19k Pro and similar large-pipeline ASICs keep hashing the old job for a few seconds */\n"
+    "\t\t/* after receiving clean_jobs=true; those shares must use the prev personal coinb2. */\n"
+    "\t\tmemcpy(&full_cb_txn[cb->coinb1_len+12],\n"
+    "\t\t\t   m->personal_coinb2_prev_bin, m->personal_coinb2_prev_len);\n"
+    "\t\tcoinb2_len_use = m->personal_coinb2_prev_len;\n"
+    "\t} else {\n"
+    "\t\tmemcpy(&full_cb_txn[cb->coinb1_len+12], cb->coinb2_bin, cb->coinb2_len);\n"
+    "\t}"
+)
+
+with open(STRATUM_C) as f:
+    sc12 = f.read()
+
+if _P12_MARKER in sc12:
+    print("[datum_stratum.c client_mining_submit prev-slot fallback] Already patched — skipping")
+elif _P12_TARGET in sc12:
+    sc12 = sc12.replace(_P12_TARGET, _P12_REPLACEMENT, 1)
+    with open(STRATUM_C, "w") as f:
+        f.write(sc12)
+    print("[datum_stratum.c client_mining_submit prev-slot fallback] Patched — ASIC pipeline drain fix")
+else:
+    print(f"ERROR: Patch 12 target not found in {STRATUM_C}")
+    sys.exit(1)
+
+
 print()
 print("All patches applied.  Rebuild datum_gateway:")
 print(f"  cd {BUILD_DIR} && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4")
