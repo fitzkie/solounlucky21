@@ -744,6 +744,56 @@ else:
     sys.exit(1)
 
 
+
+# ─── 13. datum_stratum.c: send_mining_notify — skip personal coinb2 on quickdiff ─
+# When vardiff_min=1 and an S19k Pro connects at 112 TH/s, the ASIC submits 8
+# shares in ~0.3 ms after auth, triggering quickdiff.  send_mining_notify is
+# called with quickdiff=true for the SAME job that was sent at subscribe time
+# (with standard coinb2, because last_auth_username was empty then).
+# personal_coinb2_valid is still false; the block below builds personal coinb2
+# for that job_index.  Now the submit-side picks up the personal coinb2 for
+# reconstruction, but the ASIC's pipeline was hashing with standard coinb2 →
+# completely different merkle root → H-not-zero → crash loop.
+#
+# Fix: if quickdiff fires and personal_coinb2_valid is still false, skip the
+# build entirely — the miner already has the standard coinb2 for this job and
+# personal coinb2 will be established cleanly on the next real job change.
+
+_P13_MARKER = "(!quickdiff || m->personal_coinb2_valid) &&"
+
+_P13_TARGET = (
+    "\t\t\tif (!m->personal_coinb2_valid ||\n"
+    "\t\t\t\t\tm->personal_coinb2_job_index != j->global_index) {\n"
+    "\t\t\t\t/* -- UNLUCKY21: save current personal coinb2 as prev before rebuilding */\n"
+)
+
+_P13_REPLACEMENT = (
+    "\t\t\t/* -- UNLUCKY21 Patch 13: skip personal coinb2 build on quickdiff when not */\n"
+    "\t\t\t/* yet established. Miner has standard coinb2 from subscribe time; building */\n"
+    "\t\t\t/* personal coinb2 for the same job_index via quickdiff causes H-not-zero  */\n"
+    "\t\t\t/* on ASIC pipeline drain shares (they used standard coinb2). Personal     */\n"
+    "\t\t\t/* coinb2 is established cleanly on the next real (non-quickdiff) job.     */\n"
+    "\t\t\tif ((!quickdiff || m->personal_coinb2_valid) &&\n"
+    "\t\t\t\t\t(!m->personal_coinb2_valid ||\n"
+    "\t\t\t\t\tm->personal_coinb2_job_index != j->global_index)) {\n"
+    "\t\t\t\t/* -- UNLUCKY21: save current personal coinb2 as prev before rebuilding */\n"
+)
+
+with open(STRATUM_C) as f:
+    sc13 = f.read()
+
+if _P13_MARKER in sc13:
+    print("[datum_stratum.c send_mining_notify quickdiff guard] Already patched — skipping")
+elif _P13_TARGET in sc13:
+    sc13 = sc13.replace(_P13_TARGET, _P13_REPLACEMENT, 1)
+    with open(STRATUM_C, "w") as f:
+        f.write(sc13)
+    print("[datum_stratum.c send_mining_notify quickdiff guard] Patched — S19k Pro crash loop fix")
+else:
+    print(f"ERROR: Patch 13 target not found in {STRATUM_C}")
+    sys.exit(1)
+
+
 print()
 print("All patches applied.  Rebuild datum_gateway:")
 print(f"  cd {BUILD_DIR} && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4")
