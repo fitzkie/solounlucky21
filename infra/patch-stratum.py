@@ -486,8 +486,132 @@ else:
     sys.exit(1)
 
 
+# ─── 8. datum_stratum.c: personalize job ID with session epoch (send side) ────
+# When a miner reconnects, LUXminer (and some other firmware) buffers shares
+# found while unauthorized and flushes them immediately after auth completes.
+# Those shares carry the extranonce1 (m->sid_inv) from the OLD TCP session —
+# but after reconnect, m->sid_inv has changed.  The server rebuilds coinbase
+# with the NEW m->sid_inv → different merkle → H-not-zero on every flushed
+# share.  LUXminer treats 5 consecutive H-not-zero as a crash trigger
+# ("lagged receiver!") → full miner restart → reconnect → infinite loop.
+#
+# Fix (send side): XOR the 8-char timestamp portion of j->job_id with
+# m->sid_inv before sending it to the miner.  Each TCP session therefore
+# sees a distinct personalized job ID.  Shares submitted after reconnect
+# carry the OLD personalized ID, which decodes back to a different raw
+# timestamp on the new session (see Patch 9) → stale-work (error 21) instead
+# of H-not-zero (error 23), which doesn't trigger LUXminer's crash counter.
+
+_PJID_TARGET = (
+    "\tif (quickdiff) {\n"
+    "\t\tsnprintf(s, sizeof(s), \"\\\"Q%s%2.2x\\\",\\\"%s\\\",\\\"\", j->job_id, cbselect, j->prevhash);\n"
+    "\t} else {\n"
+    "\t\tif (!new_block) {\n"
+    "\t\t\tsnprintf(s, sizeof(s), \"\\\"%s%2.2x\\\",\\\"%s\\\",\\\"\", j->job_id, cbselect, j->prevhash);\n"
+    "\t\t} else {\n"
+    "\t\t\tsnprintf(s, sizeof(s), \"\\\"N%s%2.2x\\\",\\\"%s\\\",\\\"\", j->job_id, (unsigned int)255, j->prevhash); // empty coinbase for new block\n"
+    "\t\t\tcb = &j->subsidy_only_coinbase;\n"
+    "\t\t}\n"
+    "\t}\n"
+)
+
+_PJID_REPLACEMENT = (
+    "\t/* -- UNLUCKY21: personalize job ID with session epoch to detect stale-session shares -- */\n"
+    "\tchar _pjid[15];\n"
+    "\t{\n"
+    "\t\tchar _jid_ts[9];\n"
+    "\t\tmemcpy(_jid_ts, j->job_id, 8);\n"
+    "\t\t_jid_ts[8] = 0;\n"
+    "\t\tuint32_t _raw_ts = (uint32_t)strtoul(_jid_ts, NULL, 16);\n"
+    "\t\tsnprintf(_pjid, sizeof(_pjid), \"%8.8x%s\", _raw_ts ^ m->sid_inv, j->job_id + 8);\n"
+    "\t}\n"
+    "\tif (quickdiff) {\n"
+    "\t\tsnprintf(s, sizeof(s), \"\\\"Q%s%2.2x\\\",\\\"%s\\\",\\\"\", _pjid, cbselect, j->prevhash);\n"
+    "\t} else {\n"
+    "\t\tif (!new_block) {\n"
+    "\t\t\tsnprintf(s, sizeof(s), \"\\\"%s%2.2x\\\",\\\"%s\\\",\\\"\", _pjid, cbselect, j->prevhash);\n"
+    "\t\t} else {\n"
+    "\t\t\tsnprintf(s, sizeof(s), \"\\\"N%s%2.2x\\\",\\\"%s\\\",\\\"\", _pjid, (unsigned int)255, j->prevhash); // empty coinbase for new block\n"
+    "\t\t\tcb = &j->subsidy_only_coinbase;\n"
+    "\t\t}\n"
+    "\t}\n"
+)
+
+with open(STRATUM_C) as f:
+    sc8 = f.read()
+
+if "UNLUCKY21: personalize job ID with session epoch" in sc8:
+    print("[datum_stratum.c session-epoch send] Already patched — skipping")
+elif _PJID_TARGET in sc8:
+    sc8 = sc8.replace(_PJID_TARGET, _PJID_REPLACEMENT, 1)
+    with open(STRATUM_C, "w") as f:
+        f.write(sc8)
+    print("[datum_stratum.c session-epoch send] Patched — job ID XOR'd with sid_inv on send")
+else:
+    print(f"ERROR: session-epoch send target not found in {STRATUM_C}")
+    sys.exit(1)
+
+
+# ─── 9. datum_stratum.c: session-epoch check on submit (receive side) ─────────
+# Mirror of Patch 8.  When a share arrives, XOR the received timestamp back
+# with the current m->sid_inv to recover the raw timestamp.  If it doesn't
+# match the raw timestamp stored in the job table, the share was produced in
+# a previous TCP session → return stale-work (error 21), not H-not-zero
+# (error 23).  Also decompose the remaining 6-char suffix comparison so that
+# a genuinely unknown job still returns unknown-work (error 20).
+
+_EPOCH_CHECK_TARGET = (
+    "\tif (upk_u64le(job->job_id, 0) != upk_u64le(job_id_s, 0)) {\n"
+    "\t\t//LOG_PRINTF(\"DEBUG: Job ID for index %u doesn't match expected in RAM. (%s vs %s)\", g_job_index, job->job_id, job_id_s);\n"
+    "\t\tsend_unknown_work_error(c,id);\n"
+    "\t\tm->share_count_rejected++;\n"
+    "\t\tm->share_diff_rejected+=m->last_sent_diff; // guestimate here\n"
+    "\t\treturn 0;\n"
+    "\t}\n"
+)
+
+_EPOCH_CHECK_REPLACEMENT = (
+    "\t/* -- UNLUCKY21: session-epoch check — stale-session shares return stale-work not H-not-zero -- */\n"
+    "\t{\n"
+    "\t\tchar _recv_ts_hex[9], _stored_ts_hex[9];\n"
+    "\t\tmemcpy(_recv_ts_hex, job_id_s, 8); _recv_ts_hex[8] = 0;\n"
+    "\t\tmemcpy(_stored_ts_hex, job->job_id, 8); _stored_ts_hex[8] = 0;\n"
+    "\t\tuint32_t _recv_raw_ts = (uint32_t)strtoul(_recv_ts_hex, NULL, 16) ^ m->sid_inv;\n"
+    "\t\tuint32_t _stored_raw_ts = (uint32_t)strtoul(_stored_ts_hex, NULL, 16);\n"
+    "\t\tif (_recv_raw_ts != _stored_raw_ts) {\n"
+    "\t\t\t/* share is from a previous TCP session — return stale-work, not H-not-zero */\n"
+    "\t\t\tsend_rejected_stale(c, id);\n"
+    "\t\t\tm->share_count_rejected++;\n"
+    "\t\t\tm->share_diff_rejected += m->last_sent_diff;\n"
+    "\t\t\treturn 0;\n"
+    "\t\t}\n"
+    "\t\tif (memcmp(job->job_id + 8, job_id_s + 8, 6) != 0) {\n"
+    "\t\t\t//LOG_PRINTF(\"DEBUG: Job ID for index %u doesn't match expected in RAM. (%s vs %s)\", g_job_index, job->job_id, job_id_s);\n"
+    "\t\t\tsend_unknown_work_error(c, id);\n"
+    "\t\t\tm->share_count_rejected++;\n"
+    "\t\t\tm->share_diff_rejected += m->last_sent_diff;\n"
+    "\t\t\treturn 0;\n"
+    "\t\t}\n"
+    "\t}\n"
+)
+
+with open(STRATUM_C) as f:
+    sc9 = f.read()
+
+if "UNLUCKY21: session-epoch check" in sc9:
+    print("[datum_stratum.c session-epoch check] Already patched — skipping")
+elif _EPOCH_CHECK_TARGET in sc9:
+    sc9 = sc9.replace(_EPOCH_CHECK_TARGET, _EPOCH_CHECK_REPLACEMENT, 1)
+    with open(STRATUM_C, "w") as f:
+        f.write(sc9)
+    print("[datum_stratum.c session-epoch check] Patched — stale-session shares → stale-work")
+else:
+    print(f"ERROR: session-epoch check target not found in {STRATUM_C}")
+    sys.exit(1)
+
+
 print()
 print("All patches applied.  Rebuild datum_gateway:")
 print(f"  cd {BUILD_DIR} && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4")
 print("Then restart services:")
-print("  systemctl restart reward-unlucky21 datum-gateway-unlucky21 datum-gateway-rental")
+print("  systemctl restart reward-unlucky21 datum-gateway datum-gateway-rental")
