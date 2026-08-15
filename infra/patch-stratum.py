@@ -469,7 +469,7 @@ _VROLL_REPLACEMENT = (
 with open(STRATUM_C) as f:
     sc7 = f.read()
 
-if "0x1fffe000" in sc7:
+if "UNLUCKY21: accept version bits from MRR/T21 proxy without mining.configure" in sc7:
     print("[datum_stratum.c version rolling fallback] Already patched — skipping")
 elif _VROLL_TARGET in sc7:
     sc7 = sc7.replace(_VROLL_TARGET, _VROLL_REPLACEMENT, 1)
