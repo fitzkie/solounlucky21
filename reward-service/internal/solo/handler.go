@@ -27,13 +27,18 @@ const (
 // Coinbase: 99% to finder, 1% to pool fee address.
 // No leaderboard, no rounds — each block find stands alone.
 type Handler struct {
-	pool      *pgxpool.Pool
-	rpcClient *bitcoinrpc.Client
+	pool         *pgxpool.Pool
+	rpcClient    *bitcoinrpc.Client
+	blockPending chan struct{} // non-blocking signal: a solo block needs confirmation
 }
 
 // New creates a solo Handler backed by the given DB pool and Bitcoin RPC client.
 func New(pool *pgxpool.Pool, rpc *bitcoinrpc.Client) *Handler {
-	return &Handler{pool: pool, rpcClient: rpc}
+	return &Handler{
+		pool:         pool,
+		rpcClient:    rpc,
+		blockPending: make(chan struct{}, 1),
+	}
 }
 
 // GetCoinbaseOutputs returns two outputs: finder (99%) then pool fee (1%).
@@ -64,8 +69,9 @@ func (h *Handler) RecordShare(btcAddress, workerName, difficulty string, trueDif
 	return nil
 }
 
-// BlockFound records a solo block find in solo_blocks.
-// Payout is computed here (99% to finder) and stored for frontend display.
+// BlockFound records a solo block find in solo_blocks and wakes the
+// confirmation loop. Payout is computed here (99% to finder) and stored for
+// frontend display.
 func (h *Handler) BlockFound(height int32, hash, finderAddress, coinbaseTxID string, feesSats int64) error {
 	ctx := context.Background()
 	total := subsidySats + feesSats
@@ -88,22 +94,54 @@ func (h *Handler) BlockFound(height int32, hash, finderAddress, coinbaseTxID str
 		"finder", finderAddress,
 		"payout_sats", payoutSats,
 	)
+
+	// Wake the confirmation loop. Non-blocking: if already active, the loop
+	// will pick up the new block in its next DB query.
+	select {
+	case h.blockPending <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
-// StartConfirmationLoop polls every 60 s for unconfirmed solo blocks and marks
-// them confirmed (≥2 confirmations) or orphaned (confs < 0).
+// StartConfirmationLoop sleeps until a solo block is found, then polls every
+// 60 s until the block is confirmed (≥2 confirmations) or orphaned, then goes
+// idle again. On restart it re-seeds itself if unconfirmed blocks exist in DB.
 func (h *Handler) StartConfirmationLoop(ctx context.Context) {
 	go func() {
-		ticker := time.NewTicker(60 * time.Second)
-		defer ticker.Stop()
+		// Recover any blocks that were pending before the last shutdown.
+		var count int
+		if err := h.pool.QueryRow(ctx,
+			`SELECT COUNT(*) FROM solo_blocks WHERE confirmed=false AND is_orphaned=false`,
+		).Scan(&count); err == nil && count > 0 {
+			select {
+			case h.blockPending <- struct{}{}:
+			default:
+			}
+		}
+
 		for {
+			// Idle: wait for BlockFound to signal a new block.
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
-				h.checkConfirmations(ctx)
+			case <-h.blockPending:
 			}
+
+			// Active: poll every 60 s until the unconfirmed queue is empty.
+			ticker := time.NewTicker(60 * time.Second)
+			for {
+				if remaining := h.checkConfirmations(ctx); remaining == 0 {
+					break
+				}
+				select {
+				case <-ctx.Done():
+					ticker.Stop()
+					return
+				case <-ticker.C:
+				}
+			}
+			ticker.Stop()
 		}
 	}()
 }
@@ -114,13 +152,16 @@ type pendingBlock struct {
 	height int32
 }
 
-func (h *Handler) checkConfirmations(ctx context.Context) {
+// checkConfirmations queries for unconfirmed solo blocks, checks Bitcoin RPC
+// for confirmation counts, and updates the DB. Returns the number of blocks
+// still waiting for ≥2 confirmations so the caller knows whether to keep polling.
+func (h *Handler) checkConfirmations(ctx context.Context) int {
 	rows, err := h.pool.Query(ctx,
 		`SELECT id, hash, height FROM solo_blocks
 		 WHERE confirmed = false AND is_orphaned = false`)
 	if err != nil {
 		slog.Error("solo: query unconfirmed blocks", "err", err)
-		return
+		return 1 // assume still pending; keep polling
 	}
 
 	var blocks []pendingBlock
@@ -134,10 +175,12 @@ func (h *Handler) checkConfirmations(ctx context.Context) {
 	}
 	rows.Close()
 
+	pending := 0
 	for _, b := range blocks {
 		confs, err := h.rpcClient.GetBlockConfirmations(b.hash)
 		if err != nil {
 			slog.Warn("solo: getblockheader failed", "hash", b.hash, "err", err)
+			pending++
 			continue
 		}
 		switch {
@@ -145,6 +188,7 @@ func (h *Handler) checkConfirmations(ctx context.Context) {
 			if _, err := h.pool.Exec(ctx,
 				`UPDATE solo_blocks SET is_orphaned = true WHERE id = $1`, b.id); err != nil {
 				slog.Error("solo: mark orphaned", "err", err)
+				pending++
 			} else {
 				slog.Warn("solo block orphaned", "height", b.height, "hash", b.hash)
 			}
@@ -152,11 +196,14 @@ func (h *Handler) checkConfirmations(ctx context.Context) {
 			if _, err := h.pool.Exec(ctx,
 				`UPDATE solo_blocks SET confirmed = true WHERE id = $1`, b.id); err != nil {
 				slog.Error("solo: mark confirmed", "err", err)
+				pending++
 			} else {
 				slog.Info("solo block confirmed", "height", b.height, "hash", b.hash, "confs", confs)
 			}
 		default:
 			slog.Info("solo block pending", "height", b.height, "confs", confs)
+			pending++
 		}
 	}
+	return pending
 }

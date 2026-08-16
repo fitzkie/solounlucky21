@@ -20,11 +20,12 @@ import (
 // poolHandler satisfies socket.Handler by delegating to the leaderboard service
 // and coinbase builder.
 type poolHandler struct {
-	mu        sync.RWMutex
-	svc       *leaderboard.Service
-	rpcClient *bitcoinrpc.Client
-	roundID   int64
-	top21     []leaderboard.Entry // in-memory cache, refreshed every 10s
+	mu           sync.RWMutex
+	svc          *leaderboard.Service
+	rpcClient    *bitcoinrpc.Client
+	roundID      int64
+	top21        []leaderboard.Entry // in-memory cache, refreshed every 6 minutes
+	blockPending chan struct{}        // non-blocking signal: a block needs confirmation
 }
 
 // GetCoinbaseOutputs returns the ordered coinbase output list for a miner.
@@ -78,8 +79,9 @@ func (h *poolHandler) RecordShare(btcAddress, workerName, difficulty string, tru
 	})
 }
 
-// BlockFound records the block as unconfirmed. The round is NOT closed here —
-// startConfirmationLoop will finalize it once the block reaches ≥2 confirmations.
+// BlockFound records the block as unconfirmed and wakes the confirmation loop.
+// The round is NOT closed here — startConfirmationLoop finalizes it once the
+// block reaches ≥2 confirmations.
 func (h *poolHandler) BlockFound(height int32, hash, finderAddress, coinbaseTxID string, feesSats int64) error {
 	ctx := context.Background()
 
@@ -107,43 +109,78 @@ func (h *poolHandler) BlockFound(height int32, hash, finderAddress, coinbaseTxID
 		"fees_sats", feesSats,
 		"block_id", blockID,
 	)
+
+	// Wake the confirmation loop. Non-blocking: if the loop is already active
+	// (a prior block is still pending), the signal is dropped safely — the loop
+	// will pick up the new block in its next GetUnconfirmedBlocks call.
+	select {
+	case h.blockPending <- struct{}{}:
+	default:
+	}
 	return nil
 }
 
-// startConfirmationLoop polls every 30 s for unconfirmed blocks and finalizes
-// the round once a block reaches ≥2 confirmations. Orphaned blocks are logged
-// and left in the DB; the round continues for the next valid solution.
+// startConfirmationLoop sleeps until a block is found, then polls every 30 s
+// until all pending blocks are confirmed or orphaned, then goes idle again.
+// On restart it re-seeds itself if unconfirmed blocks already exist in the DB.
 func (h *poolHandler) startConfirmationLoop(ctx context.Context) {
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
+		// Recover any blocks that were pending before the last shutdown.
+		if blocks, err := h.svc.GetUnconfirmedBlocks(ctx); err == nil && len(blocks) > 0 {
+			select {
+			case h.blockPending <- struct{}{}:
+			default:
+			}
+		}
+
 		for {
+			// Idle: wait for BlockFound to signal a new block.
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
-				h.checkConfirmations(ctx)
+			case <-h.blockPending:
 			}
+
+			// Active: poll every 30 s until the unconfirmed queue is empty.
+			ticker := time.NewTicker(30 * time.Second)
+			for {
+				if remaining := h.checkConfirmations(ctx); remaining == 0 {
+					break
+				}
+				select {
+				case <-ctx.Done():
+					ticker.Stop()
+					return
+				case <-ticker.C:
+				}
+			}
+			ticker.Stop()
 		}
 	}()
 }
 
-func (h *poolHandler) checkConfirmations(ctx context.Context) {
+// checkConfirmations queries for unconfirmed blocks, checks Bitcoin RPC for
+// confirmation counts, and updates the DB. Returns the number of blocks still
+// waiting for ≥2 confirmations so the caller knows whether to keep polling.
+func (h *poolHandler) checkConfirmations(ctx context.Context) int {
 	blocks, err := h.svc.GetUnconfirmedBlocks(ctx)
 	if err != nil {
 		slog.Error("get unconfirmed blocks failed", "err", err)
-		return
+		return 1 // assume still pending; keep polling
 	}
+	pending := 0
 	for _, b := range blocks {
 		confs, err := h.rpcClient.GetBlockConfirmations(b.Hash)
 		if err != nil {
 			slog.Warn("getblockheader failed (block not yet propagated?)",
 				"hash", b.Hash, "height", b.Height, "err", err)
+			pending++
 			continue
 		}
 		if confs < 0 {
 			if err := h.svc.MarkOrphaned(ctx, b.ID); err != nil {
 				slog.Error("mark orphaned failed", "block_id", b.ID, "err", err)
+				pending++
 			} else {
 				slog.Warn("block orphaned — marked, round continues",
 					"height", b.Height, "hash", b.Hash)
@@ -152,12 +189,14 @@ func (h *poolHandler) checkConfirmations(ctx context.Context) {
 		}
 		if confs < 2 {
 			slog.Info("block pending", "height", b.Height, "confirmations", confs)
+			pending++
 			continue
 		}
 
 		newRoundID, err := h.svc.ConfirmBlock(ctx, b.ID)
 		if err != nil {
 			slog.Error("confirm block failed", "block_id", b.ID, "err", err)
+			pending++
 			continue
 		}
 
@@ -173,13 +212,16 @@ func (h *poolHandler) checkConfirmations(ctx context.Context) {
 			"new_round_id", newRoundID,
 		)
 	}
+	return pending
 }
 
 // startRefreshLoop launches a background goroutine that refreshes the
-// in-memory leaderboard cache every 10 seconds until ctx is cancelled.
+// in-memory leaderboard cache every 6 minutes until ctx is cancelled.
+// 6 minutes keeps Neon compute free to auto-suspend between cycles
+// (Neon suspends after 5 minutes of idle).
 func (h *poolHandler) startRefreshLoop(ctx context.Context) {
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(6 * time.Minute)
 		defer ticker.Stop()
 		for {
 			select {
@@ -243,9 +285,10 @@ func main() {
 	rpc := bitcoinrpc.New(rpcURL, rpcUser, rpcPass)
 
 	handler := &poolHandler{
-		svc:       leaderboard.New(pool),
-		rpcClient: rpc,
-		roundID:   roundID,
+		svc:          leaderboard.New(pool),
+		rpcClient:    rpc,
+		roundID:      roundID,
+		blockPending: make(chan struct{}, 1),
 	}
 	handler.startRefreshLoop(ctx)
 	handler.startConfirmationLoop(ctx)
