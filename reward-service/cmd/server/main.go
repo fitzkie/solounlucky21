@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"math/big"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"unlucky21/reward/internal/bitcoinrpc"
@@ -57,7 +59,9 @@ func (h *poolHandler) GetCoinbaseOutputs(minerAddress string, feesSats int64) ([
 	return outputs, nil
 }
 
-// RecordShare records a single share submission.
+// RecordShare buffers a single share submission in memory (see
+// leaderboard.Service.BufferShare) instead of writing it to the database
+// immediately. startShareFlushLoop persists the buffer periodically.
 func (h *poolHandler) RecordShare(btcAddress, workerName, difficulty string, trueDiff float64, sourcePort int) error {
 	h.mu.RLock()
 	roundID := h.roundID
@@ -68,8 +72,7 @@ func (h *poolHandler) RecordShare(btcAddress, workerName, difficulty string, tru
 		return fmt.Errorf("invalid difficulty: %q", difficulty)
 	}
 
-	ctx := context.Background()
-	return h.svc.RecordShare(ctx, leaderboard.Share{
+	return h.svc.BufferShare(leaderboard.Share{
 		RoundID:    roundID,
 		BTCAddress: btcAddress,
 		WorkerName: workerName,
@@ -234,6 +237,30 @@ func (h *poolHandler) startRefreshLoop(ctx context.Context) {
 	}()
 }
 
+// startShareFlushLoop periodically writes buffered shares to the database in
+// one batch. 30s keeps the shares table close to real-time for the 6-minute
+// leaderboard refresh to read from, while still collapsing what could be many
+// individual submissions per second (real ASICs) into one round trip — and,
+// critically, doing nothing at all when the buffer is empty, which is what
+// lets Neon compute actually suspend when nobody's mining instead of running
+// continuously whenever any single low-power miner is connected.
+func (h *poolHandler) startShareFlushLoop(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := h.svc.FlushShares(ctx); err != nil {
+					slog.Error("flush shares failed", "err", err)
+				}
+			}
+		}
+	}()
+}
+
 // refreshLeaderboard fetches the current top-21 from the database and updates
 // the in-memory cache.
 func (h *poolHandler) refreshLeaderboard(ctx context.Context) {
@@ -252,8 +279,34 @@ func (h *poolHandler) refreshLeaderboard(ctx context.Context) {
 	h.mu.Unlock()
 }
 
+// startSoloFlushLoop periodically writes buffered solo-worker activity to the
+// database in one batch. Same reasoning as startShareFlushLoop; solo mining
+// has no leaderboard to keep fresh, so a longer interval is fine.
+func startSoloFlushLoop(ctx context.Context, h *solo.Handler) {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := h.FlushWorkers(ctx); err != nil {
+					slog.Error("flush solo workers failed", "err", err)
+				}
+			}
+		}
+	}()
+}
+
 func main() {
-	ctx := context.Background()
+	// SIGTERM/SIGINT cancel ctx, which every background loop below selects on.
+	// This matters more than it used to: shares now sit in memory for up to
+	// 30s before being flushed (see startShareFlushLoop), so a plain SIGKILL-
+	// equivalent shutdown could silently drop a buffered share. A graceful
+	// stop (systemd's default) gives the final flush below a chance to run.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -292,6 +345,7 @@ func main() {
 	}
 	handler.startRefreshLoop(ctx)
 	handler.startConfirmationLoop(ctx)
+	handler.startShareFlushLoop(ctx)
 
 	// Do initial leaderboard load before accepting connections.
 	handler.refreshLeaderboard(ctx)
@@ -309,6 +363,7 @@ func main() {
 	// Start solo pool socket server in background.
 	soloHandler := solo.New(pool, rpc)
 	soloHandler.StartConfirmationLoop(ctx)
+	startSoloFlushLoop(ctx, soloHandler)
 	soloSrv := socket.NewServer(solo.SoloSocketPath, soloHandler)
 	slog.Info("solo pool socket starting", "socket", solo.SoloSocketPath)
 	go func() {
@@ -320,4 +375,16 @@ func main() {
 
 	// Block until context cancelled (both servers run in goroutines above).
 	<-ctx.Done()
+	slog.Info("shutdown signal received — flushing buffered shares before exit")
+
+	// ctx is already cancelled, so give the final flush its own short-lived
+	// context rather than one that's already done.
+	flushCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := handler.svc.FlushShares(flushCtx); err != nil {
+		slog.Error("final share flush on shutdown failed", "err", err)
+	}
+	if err := soloHandler.FlushWorkers(flushCtx); err != nil {
+		slog.Error("final solo worker flush on shutdown failed", "err", err)
+	}
 }

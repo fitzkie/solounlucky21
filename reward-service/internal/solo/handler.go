@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,6 +31,15 @@ type Handler struct {
 	pool         *pgxpool.Pool
 	rpcClient    *bitcoinrpc.Client
 	blockPending chan struct{} // non-blocking signal: a solo block needs confirmation
+
+	mu      sync.Mutex
+	pending []workerActivity // buffered last-seen updates, see RecordShare/FlushWorkers
+}
+
+// workerActivity is one buffered "this worker is active" event.
+type workerActivity struct {
+	btcAddress string
+	workerName string
 }
 
 // New creates a solo Handler backed by the given DB pool and Bitcoin RPC client.
@@ -52,19 +62,60 @@ func (h *Handler) GetCoinbaseOutputs(minerAddress string, feesSats int64) ([]soc
 	}, nil
 }
 
-// RecordShare updates the worker's last-seen timestamp. Solo mining has no
-// leaderboard, but we track activity so the frontend can show connected miners.
+// RecordShare buffers a "this worker is active" event in memory instead of
+// writing it to the database immediately — same reasoning as the shared
+// pool's leaderboard.Service.BufferShare: a per-share DB round trip keeps
+// Neon compute awake continuously while any miner is connected. Call
+// FlushWorkers periodically to actually persist the buffer.
 func (h *Handler) RecordShare(btcAddress, workerName, difficulty string, trueDiff float64, sourcePort int) error {
-	ctx := context.Background()
+	h.mu.Lock()
+	h.pending = append(h.pending, workerActivity{btcAddress: btcAddress, workerName: workerName})
+	h.mu.Unlock()
+	return nil
+}
+
+// PendingWorkerCount returns how many worker-activity events are buffered
+// awaiting the next FlushWorkers call. Exposed for tests and shutdown draining.
+func (h *Handler) PendingWorkerCount() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.pending)
+}
+
+// FlushWorkers writes every buffered worker-activity event to the database
+// as one batched upsert, then clears the buffer. A no-op — zero DB round
+// trips — if nothing has been buffered since the last call.
+func (h *Handler) FlushWorkers(ctx context.Context) error {
+	h.mu.Lock()
+	pending := h.pending
+	h.pending = nil
+	h.mu.Unlock()
+
+	if len(pending) == 0 {
+		return nil
+	}
+
+	type workerKey struct{ addr, worker string }
+	seen := make(map[workerKey]struct{}, len(pending))
+	for _, wa := range pending {
+		seen[workerKey{wa.btcAddress, wa.workerName}] = struct{}{}
+	}
+
+	addrs := make([]string, 0, len(seen))
+	workers := make([]string, 0, len(seen))
+	for k := range seen {
+		addrs = append(addrs, k.addr)
+		workers = append(workers, k.worker)
+	}
+
 	_, err := h.pool.Exec(ctx,
 		`INSERT INTO workers (btc_address, worker_name, last_seen)
-		 VALUES ($1, $2, NOW())
-		 ON CONFLICT (btc_address, worker_name)
-		 DO UPDATE SET last_seen = EXCLUDED.last_seen`,
-		btcAddress, workerName,
+		 SELECT addr, worker, NOW() FROM UNNEST($1::TEXT[], $2::TEXT[]) AS t(addr, worker)
+		 ON CONFLICT (btc_address, worker_name) DO UPDATE SET last_seen = EXCLUDED.last_seen`,
+		addrs, workers,
 	)
 	if err != nil {
-		return fmt.Errorf("solo RecordShare: %w", err)
+		return fmt.Errorf("solo FlushWorkers: %w", err)
 	}
 	return nil
 }

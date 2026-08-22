@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -43,6 +44,9 @@ type BlockFound struct {
 // Service manages share ingestion and the rolling leaderboard.
 type Service struct {
 	pool *pgxpool.Pool
+
+	mu     sync.Mutex
+	buffer []Share
 }
 
 // New creates a new leaderboard Service backed by the given connection pool.
@@ -55,39 +59,100 @@ func (s *Service) ActiveRoundID(ctx context.Context) (int64, error) {
 	return db.ActiveRoundID(ctx, s.pool)
 }
 
-// RecordShare inserts a share row and upserts the worker last-seen record.
-func (s *Service) RecordShare(ctx context.Context, sh Share) error {
+// BufferShare appends a share to an in-memory buffer instead of writing it to
+// the database immediately. A real ASIC can submit shares multiple times a
+// second; doing 2 DB round trips per share kept Neon compute active nearly
+// continuously (it never got the 5 minutes of true idle it needs to
+// auto-suspend), which is what made this pool's Neon usage scale with live
+// share volume while the sibling pools' (tick-based, batched) usage didn't.
+// Call FlushShares periodically to actually persist the buffer.
+func (s *Service) BufferShare(sh Share) error {
 	if sh.Difficulty == nil {
-		return fmt.Errorf("leaderboard.RecordShare: Difficulty must not be nil")
+		return fmt.Errorf("leaderboard.BufferShare: Difficulty must not be nil")
+	}
+	s.mu.Lock()
+	s.buffer = append(s.buffer, sh)
+	s.mu.Unlock()
+	return nil
+}
+
+// PendingShareCount returns how many shares are buffered awaiting the next
+// FlushShares call. Exposed for tests and shutdown draining.
+func (s *Service) PendingShareCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.buffer)
+}
+
+// FlushShares writes every buffered share to the database in one batched
+// INSERT plus one batched worker-upsert, then clears the buffer. A no-op —
+// zero DB round trips — if nothing has been buffered since the last call,
+// which is what lets Neon compute actually suspend during genuinely idle
+// windows (nobody mining), not just do less work per share while active.
+func (s *Service) FlushShares(ctx context.Context) error {
+	s.mu.Lock()
+	pending := s.buffer
+	s.buffer = nil
+	s.mu.Unlock()
+
+	if len(pending) == 0 {
+		return nil
 	}
 
-	// Insert the share. share_difficulty is NUMERIC(78,0); pass as string to
-	// avoid any driver type-mapping ambiguity with *big.Int.
-	_, err := s.pool.Exec(ctx,
+	roundIDs := make([]int64, len(pending))
+	addrs := make([]string, len(pending))
+	workers := make([]string, len(pending))
+	diffs := make([]string, len(pending))
+	trueDiffs := make([]float64, len(pending))
+	ports := make([]int32, len(pending))
+
+	type workerKey struct{ addr, worker string }
+	seenWorkers := make(map[workerKey]struct{}, len(pending))
+
+	for i, sh := range pending {
+		roundIDs[i] = sh.RoundID
+		addrs[i] = sh.BTCAddress
+		workers[i] = sh.WorkerName
+		diffs[i] = sh.Difficulty.String()
+		trueDiffs[i] = sh.TrueDiff
+		ports[i] = int32(sh.SourcePort)
+		seenWorkers[workerKey{sh.BTCAddress, sh.WorkerName}] = struct{}{}
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("FlushShares begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// share_difficulty is NUMERIC(78,0); pass as text and cast, same reason
+	// the original single-row INSERT did — avoids driver type-mapping
+	// ambiguity with *big.Int.
+	if _, err := tx.Exec(ctx,
 		`INSERT INTO shares (round_id, btc_address, worker_name, share_difficulty, true_difficulty, source_port)
-		 VALUES ($1, $2, $3, $4::NUMERIC, $5, $6)`,
-		sh.RoundID,
-		sh.BTCAddress,
-		sh.WorkerName,
-		sh.Difficulty.String(),
-		sh.TrueDiff,
-		sh.SourcePort,
-	)
-	if err != nil {
-		return fmt.Errorf("insert share: %w", err)
+		 SELECT * FROM UNNEST($1::BIGINT[], $2::TEXT[], $3::TEXT[], $4::NUMERIC[], $5::DOUBLE PRECISION[], $6::INT[])`,
+		roundIDs, addrs, workers, diffs, trueDiffs, ports,
+	); err != nil {
+		return fmt.Errorf("FlushShares batch insert shares: %w", err)
 	}
 
-	// Upsert worker last-seen timestamp.
-	_, err = s.pool.Exec(ctx,
+	wAddrs := make([]string, 0, len(seenWorkers))
+	wWorkers := make([]string, 0, len(seenWorkers))
+	for k := range seenWorkers {
+		wAddrs = append(wAddrs, k.addr)
+		wWorkers = append(wWorkers, k.worker)
+	}
+	if _, err := tx.Exec(ctx,
 		`INSERT INTO workers (btc_address, worker_name, last_seen)
-		 VALUES ($1, $2, NOW())
-		 ON CONFLICT (btc_address, worker_name)
-		 DO UPDATE SET last_seen = EXCLUDED.last_seen`,
-		sh.BTCAddress,
-		sh.WorkerName,
-	)
-	if err != nil {
-		return fmt.Errorf("upsert worker: %w", err)
+		 SELECT addr, worker, NOW() FROM UNNEST($1::TEXT[], $2::TEXT[]) AS t(addr, worker)
+		 ON CONFLICT (btc_address, worker_name) DO UPDATE SET last_seen = EXCLUDED.last_seen`,
+		wAddrs, wWorkers,
+	); err != nil {
+		return fmt.Errorf("FlushShares batch upsert workers: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("FlushShares commit: %w", err)
 	}
 	return nil
 }
